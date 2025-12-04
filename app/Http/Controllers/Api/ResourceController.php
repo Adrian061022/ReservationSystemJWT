@@ -31,8 +31,9 @@ class ResourceController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'type' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'capacity' => 'nullable|integer|min:1',
+            'available' => 'sometimes|boolean',
         ]);
 
         $resource = Resource::create($validated);
@@ -49,8 +50,9 @@ class ResourceController extends Controller
 
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
+            'type' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
-            'capacity' => 'nullable|integer|min:1',
+            'available' => 'sometimes|boolean',
         ]);
 
         $resource->update($validated);

@@ -34,7 +34,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/resources/{resource}', [ResourceController::class, 'show']);
 
     // Admin CRUD for resources (index/show above are public to authenticated users)
-    Route::post('/resources', [ResourceController::class, 'store']);
+    Route::middleware('auth:sanctum')->post('/resources', [ResourceController::class, 'store']);
     Route::put('/resources/{resource}', [ResourceController::class, 'update']);
     Route::delete('/resources/{resource}', [ResourceController::class, 'destroy']);
 
