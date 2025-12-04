@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
@@ -72,45 +72,5 @@ class ResourceController extends Controller
         return response()->json(['message' => 'Erőforrás törölve.'], 200);
     }
 
-    // POST /resources/{resource}/reserve
-    public function reserve(Request $request, Resource $resource)
-    {
-        $validated = $request->validate([
-            'start_time' => 'required|date',
-            'end_time' => 'required|date|after:start_time',
-            'guests' => 'nullable|integer|min:1',
-            'note' => 'nullable|string',
-        ]);
-
-        $start = $validated['start_time'];
-        $end = $validated['end_time'];
-
-        // Alap ütközésvizsgálat (ha Reservation model start_time/end_time mezőkkel rendelkezik)
-        $conflict = Reservation::where('resource_id', $resource->id)
-            ->where(function ($q) use ($start, $end) {
-                $q->whereBetween('start_time', [$start, $end])
-                  ->orWhereBetween('end_time', [$start, $end])
-                  ->orWhere(function($q2) use ($start, $end) {
-                      $q2->where('start_time', '<=', $start)
-                         ->where('end_time', '>=', $end);
-                  });
-            })->exists();
-
-        if ($conflict) {
-            return response()->json(['message' => 'A kiválasztott időpont ütközik egy meglévő foglalással.'], 409);
-        }
-
-        $reservationData = [
-            'user_id' => $request->user()->id,
-            'resource_id' => $resource->id,
-            'start_time' => $start,
-            'end_time' => $end,
-            'guests' => $validated['guests'] ?? null,
-            'note' => $validated['note'] ?? null,
-        ];
-
-        $reservation = Reservation::create($reservationData);
-
-        return response()->json($reservation, 201);
-    }
+    
 }

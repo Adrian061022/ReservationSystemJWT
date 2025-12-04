@@ -23,6 +23,6 @@ class ReservationSeeder extends Seeder
         //      'note'=>'Szülinapi vacsi'
         // ]);
 
-        //Reservation::factory(20)->create(); 
+        Reservation::factory(20)->create(); 
     }
 }

@@ -2,13 +2,13 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\ReservationController;
-use App\Http\Controllers\Api\UserController;
-use App\Http\Controllers\Api\ResourceController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ReservationController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\ResourceController;
 
 Route::get('/hello', function (Request $request) {
-    return response()->json(['message' => 'Hello, World!']);
+    return response()->json(['message' => 'API works!']);
 });
 
 Route::post('/register', [AuthController::class, 'register']);
@@ -34,10 +34,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/resources/{resource}', [ResourceController::class, 'show']);
 
     // Admin CRUD for resources (index/show above are public to authenticated users)
-    Route::middleware('auth:sanctum')->post('/resources', [ResourceController::class, 'store']);
+    Route::post('/resources', [ResourceController::class, 'store']);
     Route::put('/resources/{resource}', [ResourceController::class, 'update']);
     Route::delete('/resources/{resource}', [ResourceController::class, 'destroy']);
 
-    // Reserve a resource (creates a Reservation via ResourceController or delegates to ReservationController)
-    Route::post('/resources/{resource}/reserve', [ResourceController::class, 'reserve']);
+
 });
