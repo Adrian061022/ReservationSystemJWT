@@ -10,7 +10,6 @@ A **Reservation System** egy Laravel-alapú API alkalmazás, amely lehetővé te
 - **Autentifikáció**: Laravel Sanctum (API tokenek)
 - **Adatbázis**: MySQL
 - **Testing**: PHPUnit
-- **Build Tool**: Vite
 - **Package Manager**: Composer, npm
 
 ## Projekt Szerkezete
