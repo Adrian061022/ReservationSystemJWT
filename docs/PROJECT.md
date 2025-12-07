@@ -227,6 +227,7 @@ Bejelentkezés e-mail címmel és jelszóval.
 > `Authorization: Bearer 2|7Fbr79b5zn8RxMfOqfdzZ31SnGWvgDidjahbdRfL2a98cfd8`
 
 ---
+<img width="703" height="500" alt="image" src="https://github.com/user-attachments/assets/83ce5cdb-df73-4b42-8e4c-f262a24f8948" />
 
 ### **POST** `/logout` - Kijelentkezés
 
@@ -240,7 +241,7 @@ A jelenlegi autentikált felhasználó kijelentkeztetése és tokenjének törl�
   "message": "Logged out successfully"
 }
 ```
-<img width="703" height="500" alt="image" src="https://github.com/user-attachments/assets/83ce5cdb-df73-4b42-8e4c-f262a24f8948" />
+
 
 ---
 
