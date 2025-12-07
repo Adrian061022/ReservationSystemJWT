@@ -129,7 +129,7 @@ reservationSystem/
 ## API Végpontok
 
 ### Nem védett végpontok:
-- **GET** `/ping` - API teszteléshez
+- **GET** `/hello` - API teszteléshez
 - **POST** `/register` - Regisztrációhoz
 - **POST** `/login` - Bejelentkezéshez
 
