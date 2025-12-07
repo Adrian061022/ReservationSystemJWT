@@ -811,12 +811,6 @@ php artisan migrate
 php artisan db:seed
 ```
 
-Ez létrehoz:
-- 1 admin felhasználót (`admin` / `admin`)
-- 9 normál felhasználót
-- 3 erőforrást
-- Néhány foglalást tesztadatokkal
-
 **8. Development szerver futtatása**
 ```bash
 php artisan serve
