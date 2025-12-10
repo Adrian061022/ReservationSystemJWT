@@ -957,17 +957,3 @@ vagy XAMPP esetén: `http://localhost/reservationSystem/public/api`
    php artisan test
    ```
 
----
-
-## Biztonsági Jellegzetességek
-
-✅ **Jelszó Hash-elés**: Bcrypt hash-elés `Hash::make()`
-✅ **Token Autentifikáció**: Laravel Sanctum API tokenek
-✅ **Role-Based Access Control**: Admin és felhasználó szerepek
-✅ **Input Validáció**: Request validáció minden endpointon
-✅ **SQL Injekció Védelem**: Eloquent ORM paraméteres lekérdezések
-✅ **CORS Támogatás**: API token alapú hozzáférés
-✅ **Jogosultság Ellenőrzés**: Middleware-szintű autentifikáció és policy-k
-
----
-
