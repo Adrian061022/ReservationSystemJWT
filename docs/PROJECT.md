@@ -1307,8 +1307,7 @@ class ReservationController extends Controller
 
 ---
 
-## Tesztek Részletes Magyarázata
-
+## Tesztek 
 A Laravel PHPUnit alapú tesztelési keretrendszert használ. A feature tesztek az API végpontokat tesztelik valós HTTP kérésekkel. A `RefreshDatabase` trait biztosítja, hogy minden teszt előtt tiszta adatbázis állapot legyen.
 
 ### 1. AuthTest - Autentifikációs Tesztek
