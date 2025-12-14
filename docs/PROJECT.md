@@ -791,8 +791,1420 @@ Resource::factory(5)->create();
 ```php
 Reservation::factory(20)->create();
 ```
+## Controller
 
-## Tesztek
+A Laravel controller-ek az MVC (Model-View-Controller) architektúra része. A controller-ek felelősek a HTTP kérések fogadásáért, az üzleti logika végrehajtásáért, és a válaszok visszaküldéséért. A Reservation System API-ja négy fő controller-t használ:
+
+### 1. AuthController - Autentifikáció Kezelése
+
+Az `AuthController` felelős a felhasználók regisztrációjáért, bejelentkezéséért és kijelentkezéséért. Laravel Sanctum tokent használ az API autentifikációhoz.
+
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
+
+class AuthController extends Controller
+{
+    /**
+     * Regisztráció - új felhasználó létrehozása
+     * 
+     * Validálja a bejövő adatokat, létrehoz egy új felhasználót
+     * és hash-eli a jelszót biztonsági okokból.
+     */
+    public function register(Request $request){
+        // Input validáció: ellenőrzi, hogy minden kötelező mező megfelelő formátumú
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email', // email egyedinek kell lennie
+            'phone' => 'nullable|string|max:20',
+            'password' => 'required|min:6', // jelszó minimum 6 karakter
+        ]);
+
+        // Új felhasználó létrehozása az adatbázisban
+        $user = User::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'phone' => $request->phone,
+            'password' => Hash::make($request->password), // Bcrypt hash-elés
+        ]);
+        
+        // Sikeres válasz 201 Created státusszal
+        return response()->json([
+            'message' => 'User registered successfully', 
+            'user' => $user
+        ], 201);
+    }
+
+    /**
+     * Bejelentkezés - token generálás
+     * 
+     * Ellenőrzi a felhasználó email és jelszó kombinációját.
+     * Sikeres bejelentkezés esetén egy API tokent generál,
+     * amelyet a personal_access_tokens táblába ment.
+     */
+    public function login(Request $request){
+        // Input validáció
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required',
+        ]);
+
+        // Felhasználó keresése email cím alapján
+        $user = User::where('email', $request->email)->first();
+
+        // Ellenőrizzük, hogy létezik-e a felhasználó és helyes-e a jelszó
+        if (!$user || !Hash::check($request->password, $user->password)) {
+            return response()->json(['message' => 'Invalid credentials'], 401);
+        }
+
+        // Laravel Sanctum token generálása
+        // Ez létrehoz egy rekordot a personal_access_tokens táblában
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        // Sikeres válasz a tokennel
+        return response()->json([
+            'access_token' => $token, 
+            'token_type' => 'Bearer'
+        ], 200);
+    }
+
+    /**
+     * Kijelentkezés - token törlése
+     * 
+     * Törli a felhasználó összes aktív tokenét a personal_access_tokens táblából.
+     * Ez biztosítja, hogy a korábbi tokenek érvénytelenné váljanak.
+     */
+    public function logout(Request $request){
+        // Az aktuális felhasználó összes tokenjének törlése
+        $request->user()->tokens()->delete();
+
+        return response()->json(['message' => 'Logged out successfully'], 200);
+    }
+}
+```
+
+**Főbb Funkciók:**
+- **register()**: Hash-eli a jelszót (`Hash::make()`), validál minden input mezőt, és létrehoz egy új rekordot a `users` táblában
+- **login()**: Ellenőrzi a jelszót (`Hash::check()`), generál egy Sanctum tokent a `createToken()` metódussal
+- **logout()**: Törli a felhasználó összes aktív tokenét az adatbázisból
+
+---
+
+### 2. UserController - Felhasználó Kezelés
+
+A `UserController` a felhasználói profilok kezelését végzi. Tartalmaz normál felhasználói és admin funkciókat egyaránt.
+
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
+
+class UserController extends Controller
+{
+    /**
+     * GET /users/me - Aktuális felhasználó profiljának lekérése
+     * 
+     * A bejelentkezett felhasználó adatait adja vissza.
+     * A $request->user() metódus automatikusan visszaadja az
+     * autentifikált felhasználót a Sanctum token alapján.
+     */
+    public function me(Request $request)
+    {
+        return response()->json($request->user(), 200);
+    }
+
+    /**
+     * PUT /users/me - Saját profil frissítése
+     * 
+     * A felhasználó módosíthatja saját nevét, email címét,
+     * jelszavát és telefonszámát. A 'sometimes' validációs szabály
+     * csak akkor aktiválódik, ha a mező jelen van a kérésben.
+     */
+    public function updateMe(Request $request)
+    {
+        $user = $request->user();
+
+        // Validáció: 'sometimes' = csak akkor kötelező, ha jelen van
+        $request->validate([
+            'name' => 'sometimes|required|string|max:255',
+            'email' => 'sometimes|required|email|unique:users,email,' . $user->id, // saját email kivéve
+            'password' => 'sometimes|nullable|min:6',
+            'phone' => 'sometimes|nullable|string',
+        ]);
+
+        // Csak azok a mezők frissülnek, amelyek jelen vannak a kérésben
+        if ($request->has('name')) $user->name = $request->name;
+        if ($request->has('email')) $user->email = $request->email;
+        if ($request->filled('password')) $user->password = Hash::make($request->password);
+        if ($request->has('phone')) $user->phone = $request->phone;
+
+        $user->save();
+
+        return response()->json($user, 200);
+    }
+
+    /**
+     * GET /users - Összes felhasználó listázása (Admin csak)
+     * 
+     * Csak admin jogosultsággal rendelkező felhasználók férhetnek hozzá.
+     * Ellenőrzi az is_admin boolean mezőt az aktuális felhasználónál.
+     */
+    public function index(Request $request)
+    {
+        // Jogosultság ellenőrzés: csak admin férhet hozzá
+        if (!$request->user()->is_admin) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        // Összes felhasználó visszaadása
+        return response()->json(User::all(), 200);
+    }
+
+    /**
+     * GET /users/{id} - Konkrét felhasználó megtekintése (Admin csak)
+     * 
+     * Admin felhasználók bármely felhasználó adatait megtekinthetik.
+     */
+    public function show(Request $request, $id)
+    {
+        // Jogosultság ellenőrzés
+        if (!$request->user()->is_admin) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        // Felhasználó keresése ID alapján
+        $user = User::find($id);
+        if (!$user) return response()->json(['message' => 'Not found'], 404);
+
+        return response()->json($user, 200);
+    }
+
+    /**
+     * DELETE /users/{id} - Felhasználó törlése (Admin csak)
+     * 
+     * Soft delete: a felhasználó nem törlődik teljesen,
+     * hanem a deleted_at mező kitöltésre kerül.
+     * A SoftDeletes trait használata a User modellben szükséges.
+     */
+    public function destroy(Request $request, $id)
+    {
+        // Jogosultság ellenőrzés
+        if (!$request->user()->is_admin) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        $user = User::find($id);
+        if (!$user) return response()->json(['message' => 'Not found'], 404);
+
+        // Soft delete: deleted_at mező kitöltése
+        $user->delete();
+        return response()->json(['message' => 'User deleted'], 200);
+    }
+}
+```
+
+**Főbb Funkciók:**
+- **me()**: Visszaadja az autentifikált felhasználó adatait
+- **updateMe()**: Részleges frissítés támogatása (`sometimes` validáció), jelszó hash-elés
+- **index(), show(), destroy()**: Admin-only műveletek, jogosultság ellenőrzéssel (`is_admin` mező)
+- **Soft Delete**: A `delete()` metódus nem törli teljesen a rekordot, csak a `deleted_at` mezőt állítja be
+
+---
+
+### 3. ResourceController - Erőforrás Kezelés
+
+A `ResourceController` kezeli az erőforrások (meeting room, equipment, stb.) CRUD műveleteit. Az erőforrások létrehozása, módosítása és törlése csak admin jogosultságú felhasználóknak engedélyezett.
+
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use App\Models\Resource;
+use App\Models\Reservation;
+
+class ResourceController extends Controller
+{
+    /**
+     * GET /resources - Összes erőforrás listázása
+     * 
+     * Minden autentifikált felhasználó megtekintheti az elérhető erőforrásokat.
+     */
+    public function index(Request $request)
+    {
+        $resources = Resource::all();
+        return response()->json($resources, 200);
+    }
+
+    /**
+     * GET /resources/{resource} - Konkrét erőforrás megtekintése
+     * 
+     * Laravel Route Model Binding: automatikusan lekéri a Resource modellt
+     * az ID alapján, és beinjektálja a controller metódusba.
+     */
+    public function show(Request $request, Resource $resource)
+    {
+        return response()->json($resource, 200);
+    }
+
+    /**
+     * POST /resources - Erőforrás létrehozása (Admin csak)
+     * 
+     * Új erőforrás hozzáadása a rendszerhez. Csak admin jogosultsággal.
+     */
+    public function store(Request $request)
+    {
+        // Jogosultság ellenőrzés
+        if (!$request->user()->is_admin) {
+            return response()->json([
+                'message' => 'Nincs jogosultságod erőforrás létrehozására.'
+            ], 403);
+        }
+
+        // Validáció
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'type' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'available' => 'sometimes|boolean', // alapértelmezett: true
+        ]);
+
+        // Erőforrás létrehozása az adatbázisban
+        $resource = Resource::create($validated);
+
+        return response()->json($resource, 201);
+    }
+
+    /**
+     * PUT/PATCH /resources/{resource} - Erőforrás módosítása (Admin csak)
+     * 
+     * Meglévő erőforrás adatainak frissítése.
+     * A 'sometimes' szabály lehetővé teszi a részleges frissítést.
+     */
+    public function update(Request $request, Resource $resource)
+    {
+        // Jogosultság ellenőrzés
+        if (!$request->user()->is_admin) {
+            return response()->json([
+                'message' => 'Nincs jogosultságod erőforrás módosítására.'
+            ], 403);
+        }
+
+        // Validáció: sometimes = csak akkor kötelező, ha jelen van
+        $validated = $request->validate([
+            'name' => 'sometimes|required|string|max:255',
+            'type' => 'sometimes|required|string|max:255',
+            'description' => 'nullable|string',
+            'available' => 'sometimes|boolean',
+        ]);
+
+        // Erőforrás frissítése
+        $resource->update($validated);
+
+        // fresh() metódus: frissített adatok lekérése az adatbázisból
+        return response()->json($resource->fresh(), 200);
+    }
+
+    /**
+     * DELETE /resources/{resource} - Erőforrás törlése (Admin csak)
+     * 
+     * Erőforrás eltávolítása a rendszerből.
+     * Hard delete: teljesen törlődik az adatbázisból.
+     */
+    public function destroy(Request $request, Resource $resource)
+    {
+        // Jogosultság ellenőrzés
+        if (!$request->user()->is_admin) {
+            return response()->json([
+                'message' => 'Nincs jogosultságod erőforrás törlésére.'
+            ], 403);
+        }
+
+        // Erőforrás törlése
+        $resource->delete();
+
+        return response()->json(['message' => 'Erőforrás törölve.'], 200);
+    }
+}
+```
+
+**Főbb Funkciók:**
+- **index(), show()**: Minden autentifikált felhasználó számára elérhető
+- **store(), update(), destroy()**: Csak admin jogosultsággal
+- **Route Model Binding**: A `Resource $resource` paraméter automatikusan lekéri a modellt
+- **Validáció**: A `sometimes` szabály részleges frissítést tesz lehetővé (PATCH)
+
+---
+
+### 4. ReservationController - Foglalás Kezelés
+
+A `ReservationController` kezeli a foglalások létrehozását, lekérését, módosítását és törlését. Tartalmaz komplex jogosultság-ellenőrzési logikát: normál felhasználók csak saját foglalásaikat érhetik el, admin felhasználók pedig mindenhez hozzáférhetnek.
+
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use App\Models\Reservation;
+
+class ReservationController extends Controller
+{
+    /**
+     * GET /reservations - Foglalások listázása
+     * 
+     * Normál felhasználó: csak saját foglalásai
+     * Admin: összes foglalás
+     */
+    public function index(Request $request){
+        $user = $request->user();
+
+        // Jogosultság alapú szűrés
+        if($user->is_admin){
+            $reservations = Reservation::all();
+        } else {
+            // Csak a felhasználó saját foglalásai
+            $reservations = Reservation::where('user_id', $user->id)->get();
+        }
+        
+        return response()->json($reservations, 200);
+    }
+
+    /**
+     * GET /reservations/{id} - Konkrét foglalás megtekintése
+     * 
+     * Normál felhasználó: csak saját foglalását tekintheti meg
+     * Admin: bármely foglalást megtekinthet
+     */
+    public function show(Request $request, $id){
+        $user = $request->user();
+
+        // Foglalás keresése, 404 hiba ha nem létezik
+        $reservation = Reservation::findOrFail($id);
+
+        // Jogosultság ellenőrzés: nem admin és nem sajátja a foglalás
+        if(!$user->is_admin && $reservation->user_id != $user->id){
+            return response()->json([
+                'message' => 'Nincs jogosultságod megtekinteni ezt a foglalást!'
+            ], 403);
+        }
+
+        return response()->json($reservation, 200);
+    }
+
+    /**
+     * POST /reservations - Foglalás létrehozása
+     * 
+     * Új foglalás létrehozása. A user_id automatikusan az aktuális
+     * felhasználó ID-je lesz. Alapértelmezett status: 'pending'.
+     */
+    public function store(Request $request)
+    {
+        // Validáció
+        $validated = $request->validate([
+            'resource_id' => 'required|exists:resources,id', // létező erőforrás
+            'start_time' => 'required|date|after_or_equal:now', // nem múltbeli
+            'end_time'   => 'required|date|after:start_time', // vége > kezdet
+        ]);
+
+        // Foglalás létrehozása
+        $reservation = Reservation::create([
+            'user_id' => $request->user()->id, // automatikus user_id kitöltés
+            'resource_id' => $validated['resource_id'],
+            'start_time' => $validated['start_time'],
+            'end_time' => $validated['end_time'],
+            'status' => 'pending', // alapértelmezett státusz
+        ]);
+
+        return response()->json($reservation, 201);
+    }
+
+    /**
+     * PUT/PATCH /reservations/{id} - Foglalás módosítása
+     * 
+     * Normál felhasználó: módosíthatja az időpontokat, de nem a státuszt
+     * Admin: mindent módosíthat, beleértve a státuszt is
+     */
+    public function update(Request $request, $id)
+    {
+        $user = $request->user();
+        $reservation = Reservation::findOrFail($id);
+
+        // Jogosultság ellenőrzés: csak admin vagy a foglalás tulajdonosa
+        if (!$user->is_admin && $reservation->user_id !== $user->id) {
+            return response()->json([
+                'message' => 'Nincs jogosultságod módosítani ezt a foglalást!'
+            ], 403);
+        }
+
+        // Validáció
+        $validated = $request->validate([
+            'resource_id' => 'sometimes|required|exists:resources,id',
+            'start_time' => 'sometimes|required|date|after_or_equal:now',
+            'end_time'   => 'sometimes|required|date|after:start_time',
+            'status'     => 'sometimes|in:pending,approved,rejected,cancelled',
+        ]);
+
+        // Ha nem admin, töröljük a status mezőt a validált adatokból
+        if (!$user->is_admin) {
+            unset($validated['status']);
+        }
+
+        // Foglalás frissítése
+        $reservation->update($validated);
+
+        // fresh() metódus: frissített adatok lekérése
+        return response()->json($reservation->fresh(), 200);
+    }
+
+    /**
+     * DELETE /reservations/{id} - Foglalás törlése
+     * 
+     * Normál felhasználó: csak saját foglalását törölheti
+     * Admin: bármely foglalást törölhet
+     */
+    public function destroy(Request $request, $id)
+    {
+        $user = $request->user();
+        $reservation = Reservation::findOrFail($id);
+
+        // Jogosultság ellenőrzés
+        if (!$user->is_admin && $reservation->user_id !== $user->id) {
+            return response()->json([
+                'message' => 'Nincs jogosultságod törölni ezt a foglalást!'
+            ], 403);
+        }
+
+        // Foglalás törlése (hard delete)
+        $reservation->delete();
+
+        return response()->json(['message' => 'Foglalás törölve.'], 200);
+    }
+}
+```
+
+**Főbb Funkciók:**
+- **Dinamikus Jogosultság Ellenőrzés**: A `is_admin` mező alapján más adatok jelennek meg
+- **Status Védelem**: Normál felhasználók nem módosíthatják a foglalás státuszát
+- **Validációs Szabályok**:
+  - `after_or_equal:now`: nem lehet múltbeli foglalás
+  - `after:start_time`: a vége mindig későbbi mint a kezdet
+  - `exists:resources,id`: csak létező erőforrásra lehet foglalni
+- **findOrFail()**: Automatikus 404 válasz, ha nem létezik a rekord
+
+---
+
+## Tesztek Részletes Magyarázata
+
+A Laravel PHPUnit alapú tesztelési keretrendszert használ. A feature tesztek az API végpontokat tesztelik valós HTTP kérésekkel. A `RefreshDatabase` trait biztosítja, hogy minden teszt előtt tiszta adatbázis állapot legyen.
+
+### 1. AuthTest - Autentifikációs Tesztek
+
+Az `AuthTest` a regisztráció, bejelentkezés és ping végpont működését ellenőrzi.
+
+```php
+<?php
+
+namespace Tests\Feature;
+
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\WithFaker;
+use Tests\TestCase;
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
+
+class AuthTest extends TestCase
+{
+    use RefreshDatabase; // Adatbázis újratöltése minden teszt előtt
+
+    /**
+     * Ping endpoint teszt
+     * 
+     * Ellenőrzi, hogy az API él-e és válaszol-e.
+     * Ez egy egyszerű health check endpoint.
+     */
+    public function test_ping_endpoint_returns_ok()
+    {
+        // HTTP GET kérés az /api/hello endpointra
+        $response = $this->getJson('/api/hello');
+        
+        // Ellenőrizzük a HTTP státusz kódot és a válasz struktúráját
+        $response->assertStatus(200)
+                ->assertJson(['message' => 'API works!']);
+    }
+
+    /**
+     * Regisztráció teszt
+     * 
+     * Ellenőrzi, hogy új felhasználó létrehozható-e.
+     * Teszteli az input validációt és az adatbázis műveletet.
+     */
+    public function test_register_creates_user()
+    {
+        // ARRANGE: Teszt adatok előkészítése
+        $payload = [
+            'name' => 'Teszt Elek',
+            'email' => 'teszt@example.com',
+            'password' => 'Jelszo_2025'
+        ];
+
+        // ACT: HTTP POST kérés a regisztrációs endpointra
+        $response = $this->postJson('/api/register', $payload);
+        
+        // ASSERT: Ellenőrzések
+        $response->assertStatus(201) // 201 Created státusz
+                ->assertJsonStructure([
+                    'message', 
+                    'user' => ['id', 'name', 'email']
+                ]);
+        
+        // Ellenőrizzük, hogy a felhasználó tényleg létrejött az adatbázisban
+        $this->assertDatabaseHas('users', [
+            'email' => 'teszt@example.com',
+        ]);
+    }
+
+    /**
+     * Sikeres bejelentkezés teszt
+     * 
+     * Ellenőrzi, hogy helyes email és jelszó kombinációval
+     * token generálódik-e.
+     */
+    public function test_login_with_valid_credentials()
+    {
+        // ARRANGE: Felhasználó létrehozása a factory-val
+        $password = 'Jelszo_2025';
+        $user = User::factory()->create([
+            'email' => 'validuser@example.com',
+            'password' => Hash::make($password), // Hash-elt jelszó
+        ]);
+
+        // ACT: Bejelentkezési kérés helyes adatokkal
+        $response = $this->postJson('/api/login', [
+            'email' => 'validuser@example.com',
+            'password' => $password, // Plain text jelszó
+        ]);
+
+        // ASSERT: Ellenőrizzük a sikeres választ
+        $response->assertStatus(200)
+                 ->assertJsonStructure(['access_token', 'token_type']);
+
+        // Ellenőrizzük, hogy létrejött-e token az adatbázisban
+        $this->assertDatabaseHas('personal_access_tokens', [
+            'tokenable_id' => $user->id,
+        ]);
+    }
+
+    /**
+     * Sikertelen bejelentkezés teszt
+     * 
+     * Ellenőrzi, hogy helytelen jelszóval elutasításra kerül-e
+     * a bejelentkezési kísérlet.
+     */
+    public function test_login_with_invalid_credentials()
+    {
+        // ARRANGE: Létező felhasználó a helyes jelszóval
+        $user = User::factory()->create([
+            'email' => 'existing@example.com',
+            'password' => Hash::make('CorrectPassword'), 
+        ]);
+
+        // ACT: Helytelen jelszóval próbálkozás
+        $response = $this->postJson('/api/login', [
+            'email' => 'existing@example.com',
+            'password' => 'wrongpass' // Rossz jelszó
+        ]);
+
+        // ASSERT: 401 Unauthorized válasz ellenőrzése
+        $response->assertStatus(401)
+                 ->assertJson(['message' => 'Invalid credentials']);
+    }
+}
+```
+
+**Tesztelési Minták:**
+- **AAA Pattern**: Arrange-Act-Assert (Előkészítés-Végrehajtás-Ellenőrzés)
+- **RefreshDatabase**: Minden teszt tiszta adatbázissal kezdődik
+- **Factory Usage**: `User::factory()->create()` teszt adatokat generál
+- **assertDatabaseHas()**: Ellenőrzi, hogy létezik-e rekord az adatbázisban
+- **assertJsonStructure()**: JSON válasz struktúrájának ellenőrzése
+
+---
+
+### 2. UserTest - Felhasználó Kezelés Tesztek
+
+A `UserTest` a felhasználói profil műveletek és admin funkciók tesztelését végzi.
+
+```php
+<?php
+
+namespace Tests\Feature;
+
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\WithFaker;
+use Tests\TestCase;
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
+
+class UserTest extends TestCase
+{
+    use RefreshDatabase;
+
+    /**
+     * Profil lekérés teszt
+     * 
+     * Ellenőrzi, hogy a bejelentkezett felhasználó
+     * le tudja-e kérni saját profilját.
+     */
+    public function test_get_current_user_profile()
+    {
+        // ARRANGE: Felhasználó létrehozása
+        $user = User::factory()->create([
+            'email' => 'user@example.com',
+            'name' => 'Test User'
+        ]);
+
+        // ACT: Profil lekérése autentifikálva
+        // actingAs() metódus: szimulálja a bejelentkezést
+        $response = $this->actingAs($user)->getJson('/api/users/me');
+
+        // ASSERT: Ellenőrizzük a választ
+        $response->assertStatus(200)
+                 ->assertJsonStructure(['id', 'name', 'email'])
+                 ->assertJson([
+                     'name' => 'Test User',
+                     'email' => 'user@example.com'
+                 ]);
+    }
+
+    /**
+     * Profil módosítás teszt
+     * 
+     * Ellenőrzi, hogy a felhasználó módosíthatja-e
+     * saját profiljának adatait.
+     */
+    public function test_update_user_profile()
+    {
+        // ARRANGE: Felhasználó létrehozása régi adatokkal
+        $user = User::factory()->create([
+            'email' => 'user@example.com',
+            'name' => 'Old Name'
+        ]);
+
+        // ACT: Profil frissítése új adatokkal
+        $response = $this->actingAs($user)->putJson('/api/users/me', [
+            'name' => 'New Name',
+            'phone' => '+36201234567'
+        ]);
+
+        // ASSERT: Ellenőrizzük a választ és az adatbázist
+        $response->assertStatus(200)
+                 ->assertJson([
+                     'name' => 'New Name',
+                     'phone' => '+36201234567'
+                 ]);
+
+        // Ellenőrizzük, hogy az adatbázisban is frissült
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'name' => 'New Name'
+        ]);
+    }
+
+    /**
+     * Admin felhasználó listázás teszt
+     * 
+     * Ellenőrzi, hogy admin jogosultsággal rendelkező
+     * felhasználó láthatja-e az összes felhasználót.
+     */
+    public function test_admin_list_all_users()
+    {
+        // ARRANGE: Admin és normál felhasználók létrehozása
+        $admin = User::factory()->create(['is_admin' => true]);
+        User::factory()->count(3)->create(['is_admin' => false]);
+
+        // ACT: Felhasználók lekérése adminként
+        $response = $this->actingAs($admin)->getJson('/api/users');
+
+        // ASSERT: Ellenőrizzük, hogy 4 felhasználó van (1 admin + 3 normál)
+        $response->assertStatus(200)
+                 ->assertJsonCount(4);
+    }
+
+    /**
+     * Nem admin felhasználó hozzáférés teszt
+     * 
+     * Ellenőrzi, hogy normál felhasználó nem férhet hozzá
+     * az admin funkciókhoz.
+     */
+    public function test_non_admin_cannot_list_users()
+    {
+        // ARRANGE: Normál felhasználó (nem admin)
+        $user = User::factory()->create(['is_admin' => false]);
+
+        // ACT: Próbálja lekérni az összes felhasználót
+        $response = $this->actingAs($user)->getJson('/api/users');
+
+        // ASSERT: 403 Forbidden válasz
+        $response->assertStatus(403)
+                 ->assertJson(['message' => 'Forbidden']);
+    }
+
+    /**
+     * Admin konkrét felhasználó megtekintés teszt
+     * 
+     * Admin felhasználó bármely más felhasználó
+     * adatait megtekintheti.
+     */
+    public function test_admin_show_specific_user()
+    {
+        // ARRANGE: Admin és cél felhasználó
+        $admin = User::factory()->create(['is_admin' => true]);
+        $user = User::factory()->create(['name' => 'Target User']);
+
+        // ACT: Konkrét felhasználó lekérése
+        $response = $this->actingAs($admin)->getJson("/api/users/{$user->id}");
+
+        // ASSERT: Ellenőrizzük a választ
+        $response->assertStatus(200)
+                 ->assertJson(['name' => 'Target User']);
+    }
+
+    /**
+     * Admin felhasználó törlés teszt
+     * 
+     * Ellenőrzi, hogy admin törölhet-e felhasználót.
+     * Soft delete ellenőrzés: deleted_at mező kitöltve.
+     */
+    public function test_admin_delete_user()
+    {
+        // ARRANGE: Admin és törlendő felhasználó
+        $admin = User::factory()->create(['is_admin' => true]);
+        $user = User::factory()->create();
+
+        // ACT: Felhasználó törlése
+        $response = $this->actingAs($admin)->deleteJson("/api/users/{$user->id}");
+
+        // ASSERT: Sikeres törlés és soft delete ellenőrzés
+        $response->assertStatus(200)
+                 ->assertJson(['message' => 'User deleted']);
+
+        // assertSoftDeleted: ellenőrzi, hogy a deleted_at mező ki van töltve
+        $this->assertSoftDeleted('users', ['id' => $user->id]);
+    }
+
+    /**
+     * Nem autentifikált hozzáférés teszt
+     * 
+     * Ellenőrzi, hogy autentifikáció nélkül
+     * nem érhetők el a protected endpointok.
+     */
+    public function test_unauthenticated_cannot_access_user_endpoints()
+    {
+        // ACT & ASSERT: Token nélkül 401 Unauthorized
+        $this->getJson('/api/users/me')->assertStatus(401);
+        $this->putJson('/api/users/me', [])->assertStatus(401);
+        $this->getJson('/api/users')->assertStatus(401);
+    }
+}
+```
+
+**Tesztelési Technikák:**
+- **actingAs()**: Szimulálja a bejelentkezést, nem kell tokent generálni
+- **assertJsonCount()**: Ellenőrzi a JSON array elemszámát
+- **assertSoftDeleted()**: Soft delete ellenőrzés (deleted_at mező)
+- **count()**: Factory metódus, több rekord létrehozására
+
+---
+
+### 3. ResourceTest - Erőforrás Kezelés Tesztek
+
+A `ResourceTest` az erőforrások CRUD műveleteit és jogosultság-kezelését teszteli.
+
+```php
+<?php
+
+namespace Tests\Feature;
+
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\WithFaker;
+use Tests\TestCase;
+use App\Models\User;
+use App\Models\Resource;
+
+class ResourceTest extends TestCase
+{
+    use RefreshDatabase;
+
+    /**
+     * Erőforrások listázás teszt
+     * 
+     * Minden autentifikált felhasználó láthatja az erőforrásokat.
+     */
+    public function test_list_all_resources()
+    {
+        // ARRANGE: 3 erőforrás létrehozása factory-val
+        Resource::factory()->count(3)->create();
+        $user = User::factory()->create();
+
+        // ACT: Erőforrások lekérése
+        $response = $this->actingAs($user)->getJson('/api/resources');
+
+        // ASSERT: 3 erőforrás a válaszban
+        $response->assertStatus(200)
+                 ->assertJsonCount(3);
+    }
+
+    /**
+     * Konkrét erőforrás megtekintés teszt
+     * 
+     * Teszteli a Route Model Binding működését.
+     */
+    public function test_show_specific_resource()
+    {
+        // ARRANGE: Erőforrás létrehozása specifikus adatokkal
+        $resource = Resource::factory()->create([
+            'name' => 'Meeting Room A',
+            'type' => 'room'
+        ]);
+        $user = User::factory()->create();
+
+        // ACT: Konkrét erőforrás lekérése ID alapján
+        $response = $this->actingAs($user)->getJson("/api/resources/{$resource->id}");
+
+        // ASSERT: Ellenőrizzük a konkrét erőforrás adatait
+        $response->assertStatus(200)
+                 ->assertJson([
+                     'name' => 'Meeting Room A',
+                     'type' => 'room'
+                 ]);
+    }
+
+    /**
+     * Admin erőforrás létrehozás teszt
+     * 
+     * Csak admin jogosultsággal lehet erőforrást létrehozni.
+     */
+    public function test_admin_create_resource()
+    {
+        // ARRANGE: Admin felhasználó
+        $admin = User::factory()->create(['is_admin' => true]);
+
+        // ACT: Új erőforrás létrehozása
+        $response = $this->actingAs($admin)->postJson('/api/resources', [
+            'name' => 'New Resource',
+            'type' => 'equipment',
+            'description' => 'A test resource',
+            'available' => true
+        ]);
+
+        // ASSERT: 201 Created státusz és struktúra ellenőrzés
+        $response->assertStatus(201)
+                 ->assertJsonStructure([
+                     'id', 'name', 'type', 'description', 'available'
+                 ]);
+
+        // Ellenőrizzük az adatbázist
+        $this->assertDatabaseHas('resources', [
+            'name' => 'New Resource',
+            'type' => 'equipment'
+        ]);
+    }
+
+    /**
+     * Nem admin erőforrás létrehozás megtagadás teszt
+     * 
+     * Normál felhasználó nem hozhat létre erőforrást.
+     */
+    public function test_non_admin_cannot_create_resource()
+    {
+        // ARRANGE: Normál felhasználó
+        $user = User::factory()->create(['is_admin' => false]);
+
+        // ACT: Erőforrás létrehozási kísérlet
+        $response = $this->actingAs($user)->postJson('/api/resources', [
+            'name' => 'Unauthorized Resource',
+            'type' => 'equipment'
+        ]);
+
+        // ASSERT: 403 Forbidden válasz
+        $response->assertStatus(403)
+                 ->assertJson([
+                     'message' => 'Nincs jogosultságod erőforrás létrehozására.'
+                 ]);
+    }
+
+    /**
+     * Admin erőforrás módosítás teszt
+     * 
+     * Admin módosíthatja az erőforrások adatait.
+     */
+    public function test_admin_update_resource()
+    {
+        // ARRANGE: Admin és módosítandó erőforrás
+        $admin = User::factory()->create(['is_admin' => true]);
+        $resource = Resource::factory()->create([
+            'name' => 'Old Name',
+            'available' => true
+        ]);
+
+        // ACT: Erőforrás frissítése
+        $response = $this->actingAs($admin)->putJson(
+            "/api/resources/{$resource->id}", 
+            [
+                'name' => 'Updated Name',
+                'available' => false
+            ]
+        );
+
+        // ASSERT: Ellenőrizzük a frissített adatokat
+        $response->assertStatus(200)
+                 ->assertJson([
+                     'name' => 'Updated Name',
+                     'available' => false
+                 ]);
+
+        // Adatbázis ellenőrzés
+        $this->assertDatabaseHas('resources', [
+            'id' => $resource->id,
+            'name' => 'Updated Name'
+        ]);
+    }
+
+    /**
+     * Admin erőforrás törlés teszt
+     * 
+     * Admin törölhet erőforrásokat.
+     * Hard delete: teljesen törlődik az adatbázisból.
+     */
+    public function test_admin_delete_resource()
+    {
+        // ARRANGE: Admin és törlendő erőforrás
+        $admin = User::factory()->create(['is_admin' => true]);
+        $resource = Resource::factory()->create();
+
+        // ACT: Erőforrás törlése
+        $response = $this->actingAs($admin)->deleteJson(
+            "/api/resources/{$resource->id}"
+        );
+
+        // ASSERT: Sikeres törlés
+        $response->assertStatus(200)
+                 ->assertJson(['message' => 'Erőforrás törölve.']);
+
+        // assertDatabaseMissing: ellenőrzi, hogy a rekord nem létezik
+        $this->assertDatabaseMissing('resources', ['id' => $resource->id]);
+    }
+
+    /**
+     * Nem admin módosítás megtagadás teszt
+     * 
+     * Normál felhasználó nem módosíthat erőforrást.
+     */
+    public function test_non_admin_cannot_update_resource()
+    {
+        // ARRANGE: Normál felhasználó és erőforrás
+        $user = User::factory()->create(['is_admin' => false]);
+        $resource = Resource::factory()->create();
+
+        // ACT: Módosítási kísérlet
+        $response = $this->actingAs($user)->putJson(
+            "/api/resources/{$resource->id}", 
+            ['name' => 'Hacked Name']
+        );
+
+        // ASSERT: 403 Forbidden válasz
+        $response->assertStatus(403)
+                 ->assertJson([
+                     'message' => 'Nincs jogosultságod erőforrás módosítására.'
+                 ]);
+    }
+
+    /**
+     * Nem autentifikált erőforrás létrehozás teszt
+     * 
+     * Token nélkül nem lehet erőforrást létrehozni.
+     */
+    public function test_unauthenticated_cannot_create_resource()
+    {
+        // ACT & ASSERT: Token nélkül 401 Unauthorized
+        $this->postJson('/api/resources', [
+            'name' => 'Test',
+            'type' => 'room'
+        ])->assertStatus(401);
+    }
+}
+```
+
+**Tesztelési Jellemzők:**
+- **assertDatabaseMissing()**: Hard delete ellenőrzése (teljesen törölt rekord)
+- **Route Model Binding Test**: A `show()` metódus automatikus model lekérést tesztel
+- **Admin vs Normál User**: Minden művelethez külön teszt a jogosultság ellenőrzésre
+
+---
+
+### 4. ReservationTest - Foglalás Kezelés Tesztek
+
+A `ReservationTest` a foglalások komplex üzleti logikáját teszteli, beleértve a jogosultság-kezelést, időpont validációt és státusz védelmét.
+
+```php
+<?php
+
+namespace Tests\Feature;
+
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\WithFaker;
+use Tests\TestCase;
+use App\Models\User;
+use App\Models\Resource;
+use App\Models\Reservation;
+use Carbon\Carbon;
+
+class ReservationTest extends TestCase
+{
+    use RefreshDatabase;
+
+    /**
+     * Felhasználó saját foglalásai teszt
+     * 
+     * Normál felhasználó csak saját foglalásait látja.
+     */
+    public function test_user_list_own_reservations()
+    {
+        // ARRANGE: Felhasználó és foglalások
+        $user = User::factory()->create();
+        $resource = Resource::factory()->create();
+        
+        // 2 foglalás létrehozása a felhasználóhoz
+        Reservation::factory()->count(2)->create([
+            'user_id' => $user->id,
+            'resource_id' => $resource->id
+        ]);
+
+        // ACT: Foglalások lekérése
+        $response = $this->actingAs($user)->getJson('/api/reservations');
+
+        // ASSERT: Csak a 2 saját foglalást látja
+        $response->assertStatus(200)
+                 ->assertJsonCount(2);
+    }
+
+    /**
+     * Admin összes foglalás teszt
+     * 
+     * Admin felhasználó minden foglalást lát.
+     */
+    public function test_admin_list_all_reservations()
+    {
+        // ARRANGE: Admin és több felhasználó foglalásai
+        $admin = User::factory()->create(['is_admin' => true]);
+        $user1 = User::factory()->create();
+        $user2 = User::factory()->create();
+        $resource = Resource::factory()->create();
+
+        // Különböző felhasználók foglalásai
+        Reservation::factory()->create([
+            'user_id' => $user1->id, 
+            'resource_id' => $resource->id
+        ]);
+        Reservation::factory()->create([
+            'user_id' => $user2->id, 
+            'resource_id' => $resource->id
+        ]);
+
+        // ACT: Foglalások lekérése adminként
+        $response = $this->actingAs($admin)->getJson('/api/reservations');
+
+        // ASSERT: Mind a 2 foglalást látja
+        $response->assertStatus(200)
+                 ->assertJsonCount(2);
+    }
+
+    /**
+     * Saját foglalás megtekintés teszt
+     * 
+     * Felhasználó megtekintheti saját foglalását.
+     */
+    public function test_show_own_reservation()
+    {
+        // ARRANGE: Felhasználó és foglalása
+        $user = User::factory()->create();
+        $resource = Resource::factory()->create();
+        $reservation = Reservation::factory()->create([
+            'user_id' => $user->id,
+            'resource_id' => $resource->id
+        ]);
+
+        // ACT: Saját foglalás lekérése
+        $response = $this->actingAs($user)->getJson(
+            "/api/reservations/{$reservation->id}"
+        );
+
+        // ASSERT: Sikeres lekérés és struktúra ellenőrzés
+        $response->assertStatus(200)
+                 ->assertJsonStructure([
+                     'id', 'user_id', 'resource_id', 
+                     'start_time', 'end_time', 'status'
+                 ]);
+    }
+
+    /**
+     * Más foglalása nem látható teszt
+     * 
+     * Normál felhasználó nem tekinthet meg más foglalását.
+     */
+    public function test_user_cannot_view_other_user_reservation()
+    {
+        // ARRANGE: Két felhasználó, egyik foglalása
+        $user1 = User::factory()->create();
+        $user2 = User::factory()->create();
+        $resource = Resource::factory()->create();
+        $reservation = Reservation::factory()->create([
+            'user_id' => $user2->id,
+            'resource_id' => $resource->id
+        ]);
+
+        // ACT: user1 próbálja megtekinteni user2 foglalását
+        $response = $this->actingAs($user1)->getJson(
+            "/api/reservations/{$reservation->id}"
+        );
+
+        // ASSERT: 403 Forbidden válasz
+        $response->assertStatus(403)
+                 ->assertJson([
+                     'message' => 'Nincs jogosultságod megtekinteni ezt a foglalást!'
+                 ]);
+    }
+
+    /**
+     * Foglalás létrehozás teszt
+     * 
+     * Teszteli az új foglalás létrehozását jövőbeli időpontra.
+     * Carbon library: dátum és idő kezelés.
+     */
+    public function test_create_reservation()
+    {
+        // ARRANGE: Felhasználó és erőforrás
+        $user = User::factory()->create();
+        $resource = Resource::factory()->create();
+        
+        // Jövőbeli időpontok Carbon-nal
+        $startTime = Carbon::now()->addHours(2);
+        $endTime = $startTime->copy()->addHours(1);
+
+        // ACT: Foglalás létrehozása
+        $response = $this->actingAs($user)->postJson('/api/reservations', [
+            'resource_id' => $resource->id,
+            'start_time' => $startTime,
+            'end_time' => $endTime
+        ]);
+
+        // ASSERT: 201 Created és pending státusz
+        $response->assertStatus(201)
+                 ->assertJsonStructure([
+                     'id', 'user_id', 'resource_id', 
+                     'start_time', 'end_time', 'status'
+                 ])
+                 ->assertJson(['status' => 'pending']);
+
+        // Adatbázis ellenőrzés
+        $this->assertDatabaseHas('reservations', [
+            'user_id' => $user->id,
+            'resource_id' => $resource->id
+        ]);
+    }
+
+    /**
+     * Múltbeli foglalás tilalmazás teszt
+     * 
+     * Validációs szabály: nem lehet múltbeli foglalást létrehozni.
+     */
+    public function test_cannot_create_reservation_in_past()
+    {
+        // ARRANGE: Felhasználó és erőforrás
+        $user = User::factory()->create();
+        $resource = Resource::factory()->create();
+        
+        // Múltbeli időpontok
+        $startTime = Carbon::now()->subHours(1); // 1 órával ezelőtt
+        $endTime = $startTime->copy()->addHours(1);
+
+        // ACT: Múltbeli foglalás kísérlete
+        $response = $this->actingAs($user)->postJson('/api/reservations', [
+            'resource_id' => $resource->id,
+            'start_time' => $startTime,
+            'end_time' => $endTime
+        ]);
+
+        // ASSERT: 422 Unprocessable Entity (validációs hiba)
+        $response->assertStatus(422);
+    }
+
+    /**
+     * Felhasználó foglalás módosítás teszt
+     * 
+     * Normál felhasználó módosíthatja saját foglalásának időpontjait.
+     */
+    public function test_user_update_own_reservation()
+    {
+        // ARRANGE: Felhasználó és foglalása
+        $user = User::factory()->create();
+        $resource = Resource::factory()->create();
+        $reservation = Reservation::factory()->create([
+            'user_id' => $user->id,
+            'resource_id' => $resource->id,
+            'start_time' => Carbon::now()->addHours(3),
+            'end_time' => Carbon::now()->addHours(4)
+        ]);
+
+        // Új időpontok
+        $newStartTime = Carbon::now()->addHours(5);
+        $newEndTime = $newStartTime->copy()->addHours(2);
+
+        // ACT: Foglalás frissítése
+        $response = $this->actingAs($user)->putJson(
+            "/api/reservations/{$reservation->id}", 
+            [
+                'start_time' => $newStartTime,
+                'end_time' => $newEndTime
+            ]
+        );
+
+        // ASSERT: Sikeres frissítés
+        $response->assertStatus(200);
+
+        // Frissítjük az objektumot az adatbázisból
+        $reservation->refresh();
+        
+        // Ellenőrizzük az időpontokat (ISO formátumban)
+        $this->assertEquals(
+            $newStartTime->format('Y-m-d H:i'), 
+            $reservation->start_time->format('Y-m-d H:i')
+        );
+        $this->assertEquals(
+            $newEndTime->format('Y-m-d H:i'), 
+            $reservation->end_time->format('Y-m-d H:i')
+        );
+    }
+
+    /**
+     * Admin státusz módosítás teszt
+     * 
+     * Admin felhasználó módosíthatja a foglalás státuszát.
+     */
+    public function test_admin_can_change_reservation_status()
+    {
+        // ARRANGE: Admin, felhasználó és foglalás
+        $admin = User::factory()->create(['is_admin' => true]);
+        $user = User::factory()->create();
+        $resource = Resource::factory()->create();
+        $reservation = Reservation::factory()->create([
+            'user_id' => $user->id,
+            'resource_id' => $resource->id,
+            'status' => 'pending'
+        ]);
+
+        // ACT: Status módosítása approved-ra
+        $response = $this->actingAs($admin)->putJson(
+            "/api/reservations/{$reservation->id}", 
+            ['status' => 'approved']
+        );
+
+        // ASSERT: Státusz megváltozott
+        $response->assertStatus(200)
+                 ->assertJson(['status' => 'approved']);
+    }
+
+    /**
+     * Felhasználó státusz védelem teszt
+     * 
+     * Normál felhasználó NEM módosíthatja a státuszt.
+     */
+    public function test_user_cannot_change_reservation_status()
+    {
+        // ARRANGE: Felhasználó és foglalása
+        $user = User::factory()->create();
+        $resource = Resource::factory()->create();
+        $reservation = Reservation::factory()->create([
+            'user_id' => $user->id,
+            'resource_id' => $resource->id,
+            'status' => 'pending'
+        ]);
+
+        // ACT: Status módosítási kísérlet
+        $response = $this->actingAs($user)->putJson(
+            "/api/reservations/{$reservation->id}", 
+            ['status' => 'approved']
+        );
+
+        // ASSERT: Státusz NEM változott meg
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('reservations', [
+            'id' => $reservation->id,
+            'status' => 'pending' // továbbra is pending
+        ]);
+    }
+
+    /**
+     * Foglalás törlés teszt
+     * 
+     * Felhasználó törölheti saját foglalását.
+     */
+    public function test_delete_reservation()
+    {
+        // ARRANGE: Felhasználó és foglalása
+        $user = User::factory()->create();
+        $resource = Resource::factory()->create();
+        $reservation = Reservation::factory()->create([
+            'user_id' => $user->id,
+            'resource_id' => $resource->id
+        ]);
+
+        // ACT: Foglalás törlése
+        $response = $this->actingAs($user)->deleteJson(
+            "/api/reservations/{$reservation->id}"
+        );
+
+        // ASSERT: Sikeres törlés (hard delete)
+        $response->assertStatus(200);
+
+        // Ellenőrizzük, hogy nincs az adatbázisban
+        $this->assertDatabaseMissing('reservations', [
+            'id' => $reservation->id
+        ]);
+    }
+
+    /**
+     * Nem autentifikált foglalás létrehozás teszt
+     * 
+     * Token nélkül nem lehet foglalást létrehozni.
+     */
+    public function test_unauthenticated_cannot_create_reservation()
+    {
+        // ACT & ASSERT: Token nélkül 401 Unauthorized
+        $this->postJson('/api/reservations', [
+            'resource_id' => 1,
+            'start_time' => Carbon::now()->addHours(1),
+            'end_time' => Carbon::now()->addHours(2)
+        ])->assertStatus(401);
+    }
+}
+```
+
+---
 
 ### Teszt Futtatása
 
