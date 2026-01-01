@@ -2,7 +2,7 @@
 
 ## Projekt Áttekintése
 
-A **Reservation System** egy Laravel-alapú REST API alkalmazás, amely lehetővé teszi a felhasználók számára erőforrások foglalását (például meetingtermek, felszerelések, berendezések). Az alkalmazás felhasználó-autentifikáción alapul (Laravel Sanctum API tokenek) és szerep-alapú hozzáférés-vezérlést (RBAC) alkalmaz az adminisztrációs funkciók megvédésére.
+A **Reservation System** egy Laravel-alapú REST API alkalmazás, amely lehetővé teszi a felhasználók számára erőforrások foglalását (például meetingtermek, felszerelések, berendezések). Az alkalmazás felhasználó-autentifikáción alapul (JWT tokenek) és szerep-alapú hozzáférés-vezérlést (RBAC) alkalmaz az adminisztrációs funkciók megvédésére.
 
 **Base URL:** `http://127.0.0.1:8000/api` (local development)
 vagy `http://localhost/reservationSystem/public/api` (XAMPP)
@@ -10,7 +10,7 @@ vagy `http://localhost/reservationSystem/public/api` (XAMPP)
 ## Technológia Stack
 
 - **Backend Framework**: Laravel 11
-- **Autentifikáció**: Laravel Sanctum (API tokenek)
+- **Autentifikáció**: JWT (tymon/jwt-auth)
 - **Adatbázis**: MySQL 8.0+
 - **Testing**: PHPUnit (Feature tesztek)
 - **Package Manager**: Composer, npm
@@ -19,18 +19,18 @@ vagy `http://localhost/reservationSystem/public/api` (XAMPP)
 ## Adatbázis Terv
 
 ```
-+---------------------+     +---------------------+       +-----------------+        +-------------+
-|personal_access_tokens|    |        users        |       |   reservations  |        |  resources  |
-+---------------------+     +---------------------+       +-----------------+        +-------------+
-| id (PK)             |   _1| id (PK)             |1__    | id (PK)         |     __1| id (PK)     |
-| tokenable_id (FK)   |K_/  | name                |   \__N| user_id (FK)    |    /   | name        |
-| tokenable_type      |     | email (unique)      |       | resource_id (FK)|M__/    | type        |
-| name                |     | password            |       | start_time      |        | description |
-| token (unique)      |     | phone (nullable)    |       | end_time        |        | available   |
-| abilities           |     | is_admin (boolean)  |       | status          |        | created_at  |
-| last_used_at        |     | created_at          |       | created_at      |        | updated_at  |
-| created_at          |     | updated_at          |       | updated_at      |        +-------------+
-+---------------------+     +---------------------+       +-----------------+
++---------------------+       +-----------------+        +-------------+
+|        users        |       |   reservations  |        |  resources  |
++---------------------+       +-----------------+        +-------------+
+| id (PK)             |1__    | id (PK)         |     __1| id (PK)     |
+| name                |   \__N| user_id (FK)    |    /   | name        |
+| email (unique)      |       | resource_id (FK)|M__/    | type        |
+| password            |       | start_time      |        | description |
+| phone (nullable)    |       | end_time        |        | available   |
+| is_admin (boolean)  |       | status          |        | created_at  |
+| created_at          |       | created_at      |        | updated_at  |
+| updated_at          |       | updated_at      |        +-------------+
++---------------------+       +-----------------+
 ```
 
 ## Projekt Szerkezete
@@ -40,12 +40,12 @@ reservationSystem/
 ├── app/
 │   ├── Http/
 │   │   └── Controllers/
-│   │       ├── AuthController.php          # Regisztráció, bejelentkezés, kijelentkezés
+│   │       ├── AuthController.php          # Regisztráció, bejelentkezés, kijelentkezés, refresh
 │   │       ├── UserController.php          # Felhasználó profil kezelés (admin funkciók)
 │   │       ├── ResourceController.php      # Erőforrás CRUD operációk
 │   │       └── ReservationController.php   # Foglalás CRUD operációk
 │   ├── Models/
-│   │   ├── User.php                        # Felhasználó model (Sanctum)
+│   │   ├── User.php                        # Felhasználó model (JWT)
 │   │   ├── Resource.php                    # Erőforrás model
 │   │   └── Reservation.php                 # Foglalás model
 │   └── Providers/
@@ -75,13 +75,120 @@ reservationSystem/
 │   │   └── ExampleTest.php
 │   └── Unit/
 ├── config/
-│   ├── auth.php                            # Autentifikáció konfiguráció
-│   └── sanctum.php                         # Sanctum (API) konfiguráció
-├── .env                                    # Környezeti változók
-├── composer.json                           # PHP függőségek
+│   ├── auth.php                            # Autentifikáció konfiguráció (JWT guard)
+│   └── jwt.php                             # JWT konfiguráció
+├── .env                                    # Környezeti változók (JWT_SECRET)
+├── composer.json                           # PHP függőségek (tymon/jwt-auth)
 ├── phpunit.xml                             # PHPUnit konfiguráció
 └── README.md
 ```
+
+## Projekt Telepítése és Beállítása
+
+### Előfeltételek
+- PHP 8.2 vagy újabb
+- Composer
+- MySQL 8.0 vagy újabb
+- XAMPP (opcionális, local fejlesztéshez)
+
+### Telepítési Lépések
+
+1. **Projekt letöltése**
+```bash
+git clone <repository-url>
+cd reservationSystem
+```
+
+2. **Függőségek telepítése**
+```bash
+composer install
+npm install
+```
+
+3. **JWT csomag telepítése**
+```bash
+composer require tymon/jwt-auth
+```
+
+4. **Környezeti változók beállítása**
+```bash
+cp .env.example .env
+php artisan key:generate
+```
+
+5. **JWT konfigurációs fájl publikálása és titkos kulcs generálása**
+```bash
+php artisan vendor:publish --provider="Tymon\JWTAuth\Providers\LaravelServiceProvider"
+php artisan jwt:secret
+```
+
+Ez beállítja a `JWT_SECRET` kulcsot a `.env` fájlban.
+
+6. **Adatbázis beállítása**
+
+Szerkeszd a `.env` fájlt:
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=reservation_system
+DB_USERNAME=root
+DB_PASSWORD=
+```
+
+7. **Adatbázis migráció és seedek futtatása**
+```bash
+php artisan migrate:fresh --seed
+```
+
+8. **Fejlesztői szerver indítása**
+```bash
+php artisan serve
+```
+
+Az API elérhető: `http://127.0.0.1:8000/api`
+
+### JWT Konfiguráció
+
+A JWT autentikáció konfigurációja a `config/auth.php` fájlban található:
+
+```php
+'guards' => [
+    'web' => [
+        'driver' => 'session',
+        'provider' => 'users',
+    ],
+    'api' => [
+        'driver' => 'jwt',  // JWT guard használata az API-hoz
+        'provider' => 'users',
+    ],
+],
+```
+
+A `User` model implementálja a `JWTSubject` interface-t:
+
+```php
+use Tymon\JWTAuth\Contracts\JWTSubject;
+
+class User extends Authenticatable implements JWTSubject
+{
+    public function getJWTIdentifier()
+    {
+        return $this->getKey();
+    }
+
+    public function getJWTCustomClaims()
+    {
+        return [];
+    }
+}
+```
+
+### JWT Token Jellemzők
+- **Érvényességi idő**: 60 perc (3600 mp)
+- **Token formátum**: `header.payload.signature` (3 rész)
+- **Refresh mechanizmus**: `/api/refresh` endpoint
+- **Blacklist**: Logout-nál a token invalidálódik
 
 ## Adatmodell
 
@@ -130,8 +237,27 @@ reservationSystem/
 
 ### Nem védett végpontok:
 - **GET** `/hello` - API teszteléshez
-- **POST** `/register` - Regisztrációhoz
-- **POST** `/login` - Bejelentkezéshez
+- **POST** `/register` - Regisztrációhoz (visszaad JWT tokent)
+- **POST** `/login` - Bejelentkezéshez (visszaad JWT tokent)
+
+### Védett végpontok (JWT token szükséges):
+- **POST** `/logout` - Kijelentkezés (token invalidálás)
+- **POST** `/refresh` - JWT token frissítése
+- **GET** `/users/me` - Saját profil lekérése
+- **PUT** `/users/me` - Saját profil módosítása
+- **GET** `/users` - Összes user (admin)
+- **GET** `/users/{id}` - User részletei (admin)
+- **DELETE** `/users/{id}` - User törlése (admin)
+- **GET** `/resources` - Összes erőforrás
+- **GET** `/resources/{id}` - Erőforrás részletei
+- **POST** `/resources` - Új erőforrás (admin)
+- **PUT** `/resources/{id}` - Erőforrás módosítása (admin)
+- **DELETE** `/resources/{id}` - Erőforrás törlése (admin)
+- **GET** `/reservations` - Összes foglalás
+- **GET** `/reservations/{id}` - Foglalás részletei
+- **POST** `/reservations` - Új foglalás
+- **PUT** `/reservations/{id}` - Foglalás módosítása
+- **DELETE** `/reservations/{id}` - Foglalás törlése
 
 <img width="538" height="131" alt="image" src="https://github.com/user-attachments/assets/f8dbb8d2-7c56-42d0-807c-4e988b251b73" />
 
@@ -176,7 +302,10 @@ reservationSystem/
         "updated_at": "2025-12-07T17:40:51.000000Z",
         "created_at": "2025-12-07T17:40:51.000000Z",
         "id": 66
-    }
+    },
+    "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vMTI3...",
+    "token_type": "bearer",
+    "expires_in": 3600
 }
 ```
 
@@ -208,8 +337,15 @@ Bejelentkezés e-mail címmel és jelszóval.
 **Válasz (sikeres bejelentkezés):** `200 OK`
 ```json
 {
-    "access_token": "2|7Fbr79b5zn8RxMfOqfdzZ31SnGWvgDidjahbdRfL2a98cfd8",
-    "token_type": "Bearer"
+    "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vMTI3LjAuMC4xOjgwMDAvYXBpL2xvZ2luIiwiaWF0IjoxNzY3MjM1MTM2LCJleHAiOjE3NjcyMzg3MzYsIm5iZiI6MTc2NzIzNTEzNiwianRpIjoidjczTnZZMTJDT1BXZzY4RyIsInN1YiI6IjIyIiwicHJ2IjoiMjNiZDVjODk0OWY2MDBhZGIzOWU3MDFjNDAwODcyZGI3YTU5NzZmNyJ9.L1qjt1gkWaHUDv9Rwl_c5_tFam-7yEqegu2AUGE_5uQ",
+    "token_type": "bearer",
+    "expires_in": 3600,
+    "user": {
+        "id": 22,
+        "name": "John Doe",
+        "email": "john@example.com",
+        "phone": "+36201234567"
+    }
 }
 ```
 
@@ -222,26 +358,51 @@ Bejelentkezés e-mail címmel és jelszóval.
 
 ---
 
-> Innen kezdve minden végpont **autentifikált**, tehát a kérés `Authorization` headerében meg kell adni a tokent:
+> Innen kezdve minden végpont **autentifikált**, tehát a kérés `Authorization` headerében meg kell adni a JWT tokent:
 > 
-> `Authorization: Bearer 2|7Fbr79b5zn8RxMfOqfdzZ31SnGWvgDidjahbdRfL2a98cfd8`
+> `Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...`
+>
+> **JWT Token jellemzők:**
+> - 3 részből áll (header.payload.signature)
+> - Tartalmazza az érvényességi időt (expires_in: 3600 mp = 1 óra)
+> - Token frissíthető a `/refresh` endpoint-tal
+> - Logout-nál invalidálódik (blacklist)
 
 ---
 <img width="703" height="500" alt="image" src="https://github.com/user-attachments/assets/83ce5cdb-df73-4b42-8e4c-f262a24f8948" />
 
 ### **POST** `/logout` - Kijelentkezés
 
-A jelenlegi autentikált felhasználó kijelentkeztetése és tokenjének törlése.
+A jelenlegi autentikált felhasználó kijelentkeztetése és JWT tokenjének invalidálása.
 <img width="871" height="356" alt="image" src="https://github.com/user-attachments/assets/0ac0360d-2797-4ff9-8246-d625cac6b8a7" />
 
 
 **Válasz (sikeres kijelentkezés):** `200 OK`
 ```json
 {
-  "message": "Logged out successfully"
+  "message": "Successfully logged out"
 }
 ```
 
+---
+
+### **POST** `/refresh` - JWT Token Frissítése
+
+Új JWT token generálása a régi token alapján, anélkül hogy újra be kellene jelentkezni.
+
+**Válasz:** `200 OK`
+```json
+{
+    "access_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+    "token_type": "bearer",
+    "expires_in": 3600,
+    "user": {
+        "id": 22,
+        "name": "John Doe",
+        "email": "john@example.com"
+    }
+}
+```
 
 ---
 
@@ -648,32 +809,33 @@ A foglalás a következő státuszok lehetnek:
 
 | HTTP | Útvonal | Jogosultság | Státusz | Leírás |
 |------|---------|-------------|--------|--------|
-| GET | `/ping` | Nyilvános | 200 OK | API teszteléshez |
-| POST | `/register` | Nyilvános | 201 Created, 422 | Regisztráció |
-| POST | `/login` | Nyilvános | 200 OK, 401 | Bejelentkezés |
-| POST | `/logout` | Auth | 200 OK, 401 | Kijelentkezés |
-| GET | `/users/me` | Auth | 200 OK, 401 | Saját profil |
-| PUT | `/users/me` | Auth | 200 OK, 401, 422 | Profil frissítés |
+| GET | `/hello` | Nyilvános | 200 OK | API teszteléshez |
+| POST | `/register` | Nyilvános | 201 Created, 422 | Regisztráció (JWT token) |
+| POST | `/login` | Nyilvános | 200 OK, 401 | Bejelentkezés (JWT token) |
+| POST | `/logout` | Auth (JWT) | 200 OK, 401 | Kijelentkezés (token invalidálás) |
+| POST | `/refresh` | Auth (JWT) | 200 OK, 401 | JWT token frissítése |
+| GET | `/users/me` | Auth (JWT) | 200 OK, 401 | Saját profil |
+| PUT | `/users/me` | Auth (JWT) | 200 OK, 401, 422 | Profil frissítés |
 | GET | `/users` | Admin | 200 OK, 403, 401 | Összes felhasználó |
 | GET | `/users/{id}` | Admin | 200 OK, 403, 404, 401 | Konkrét felhasználó |
 | DELETE | `/users/{id}` | Admin | 200 OK, 403, 404, 401 | Felhasználó törlés(soft delete) |
-| GET | `/resources` | Auth | 200 OK, 401 | Erőforrások |
-| GET | `/resources/{id}` | Auth | 200 OK, 401, 404 | Konkrét erőforrás |
+| GET | `/resources` | Auth (JWT) | 200 OK, 401 | Erőforrások |
+| GET | `/resources/{id}` | Auth (JWT) | 200 OK, 401, 404 | Konkrét erőforrás |
 | POST | `/resources` | Admin | 201 Created, 403, 401 | Erőforrás létrehozás |
 | PUT | `/resources/{id}` | Admin | 200 OK, 403, 401 | Erőforrás módosítás |
 | DELETE | `/resources/{id}` | Admin | 200 OK, 403, 401 | Erőforrás törlés |
-| GET | `/reservations` | Auth | 200 OK, 401 | Foglalások |
-| GET | `/reservations/{id}` | Auth | 200 OK, 401, 403, 404 | Konkrét foglalás |
-| POST | `/reservations` | Auth | 201 Created, 401, 422 | Foglalás létrehozás |
-| PUT | `/reservations/{id}` | Auth | 200 OK, 401, 403, 422 | Foglalás módosítás |
-| DELETE | `/reservations/{id}` | Auth | 200 OK, 401, 403, 404 | Foglalás törlés |
+| GET | `/reservations` | Auth (JWT) | 200 OK, 401 | Foglalások |
+| GET | `/reservations/{id}` | Auth (JWT) | 200 OK, 401, 403, 404 | Konkrét foglalás |
+| POST | `/reservations` | Auth (JWT) | 201 Created, 401, 422 | Foglalás létrehozás |
+| PUT | `/reservations/{id}` | Auth (JWT) | 200 OK, 401, 403, 422 | Foglalás módosítás |
+| DELETE | `/reservations/{id}` | Auth (JWT) | 200 OK, 401, 403, 404 | Foglalás törlés |
 
 ## Autentifikáció és Jogosultságok
 
 ### Token-alapú Autentifikáció
 - Minden autentifikált endpoint `Authorization: Bearer {token}` header-t igényel
-- A token bejelentkezéskor jön vissza
-- A tokeneket a `personal_access_tokens` táblában tároljuk
+- A JWT token bejelentkezéskor/regisztrációkor jön vissza
+- A tokenek memóriában vannak, invalidáláskor blacklist-re kerülnek
 - Érvénytelen token esetén: `401 Unauthorized`
 
 ### Szerepek (Roles)
@@ -797,7 +959,7 @@ A Laravel controller-ek az MVC (Model-View-Controller) architektúra része. A c
 
 ### 1. AuthController - Autentifikáció Kezelése
 
-Az `AuthController` felelős a felhasználók regisztrációjáért, bejelentkezéséért és kijelentkezéséért. Laravel Sanctum tokent használ az API autentifikációhoz.
+Az `AuthController` felelős a felhasználók regisztrációjáért, bejelentkezéséért, kijelentkezéséért és token frissítéséért. JWT (JSON Web Token) tokent használ az API autentifikációhoz.
 
 ```php
 <?php
@@ -807,91 +969,109 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class AuthController extends Controller
 {
     /**
      * Regisztráció - új felhasználó létrehozása
      * 
-     * Validálja a bejövő adatokat, létrehoz egy új felhasználót
-     * és hash-eli a jelszót biztonsági okokból.
+     * Validálja a bejövő adatokat, létrehoz egy új felhasználót,
+     * hash-eli a jelszót és automatikusan generál JWT tokent.
      */
-    public function register(Request $request){
-        // Input validáció: ellenőrzi, hogy minden kötelező mező megfelelő formátumú
+    public function register(Request $request)
+    {
         $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email', // email egyedinek kell lennie
+            'email' => 'required|email|unique:users,email',
             'phone' => 'nullable|string|max:20',
-            'password' => 'required|min:6', // jelszó minimum 6 karakter
+            'password' => 'required|min:6',
         ]);
 
-        // Új felhasználó létrehozása az adatbázisban
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'phone' => $request->phone,
-            'password' => Hash::make($request->password), // Bcrypt hash-elés
+            'password' => Hash::make($request->password),
         ]);
-        
-        // Sikeres válasz 201 Created státusszal
+
+        // JWT token generálása az új felhasználóhoz
+        $token = JWTAuth::fromUser($user);
+
         return response()->json([
-            'message' => 'User registered successfully', 
-            'user' => $user
+            'message' => 'User registered successfully',
+            'user' => $user,
+            'access_token' => $token,
+            'token_type' => 'bearer',
+            'expires_in' => auth('api')->factory()->getTTL() * 60
         ], 201);
     }
 
     /**
-     * Bejelentkezés - token generálás
+     * Bejelentkezés - JWT token generálás
      * 
      * Ellenőrzi a felhasználó email és jelszó kombinációját.
-     * Sikeres bejelentkezés esetén egy API tokent generál,
-     * amelyet a personal_access_tokens táblába ment.
+     * Sikeres bejelentkezés esetén JWT tokent generál.
      */
-    public function login(Request $request){
-        // Input validáció
-        $request->validate([
+    public function login(Request $request)
+    {
+        $credentials = $request->validate([
             'email' => 'required|email',
             'password' => 'required',
         ]);
 
-        // Felhasználó keresése email cím alapján
-        $user = User::where('email', $request->email)->first();
-
-        // Ellenőrizzük, hogy létezik-e a felhasználó és helyes-e a jelszó
-        if (!$user || !Hash::check($request->password, $user->password)) {
+        if (!$token = JWTAuth::attempt($credentials)) {
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
 
-        // Laravel Sanctum token generálása
-        // Ez létrehoz egy rekordot a personal_access_tokens táblában
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $user = JWTAuth::user();
 
-        // Sikeres válasz a tokennel
         return response()->json([
-            'access_token' => $token, 
-            'token_type' => 'Bearer'
-        ], 200);
+            'access_token' => $token,
+            'token_type' => 'bearer',
+            'expires_in' => auth('api')->factory()->getTTL() * 60,
+            'user' => $user
+        ]);
     }
 
     /**
-     * Kijelentkezés - token törlése
+     * Kijelentkezés - JWT token invalidálása
      * 
-     * Törli a felhasználó összes aktív tokenét a personal_access_tokens táblából.
-     * Ez biztosítja, hogy a korábbi tokenek érvénytelenné váljanak.
+     * A tokent invalidálja (blacklist-re teszi), így
+     * a korábbi token többé nem használható.
      */
-    public function logout(Request $request){
-        // Az aktuális felhasználó összes tokenjének törlése
-        $request->user()->tokens()->delete();
+    public function logout()
+    {
+        auth('api')->logout();
 
-        return response()->json(['message' => 'Logged out successfully'], 200);
+        return response()->json(['message' => 'Successfully logged out']);
+    }
+
+    /**
+     * Token frissítése
+     * 
+     * Új JWT tokent generál a régi token alapján,
+     * anélkül hogy újra be kellene jelentkezni.
+     */
+    public function refresh()
+    {
+        $token = auth('api')->refresh();
+
+        return response()->json([
+            'access_token' => $token,
+            'token_type' => 'bearer',
+            'expires_in' => auth('api')->factory()->getTTL() * 60,
+            'user' => auth('api')->user()
+        ]);
     }
 }
 ```
 
 **Főbb Funkciók:**
-- **register()**: Hash-eli a jelszót (`Hash::make()`), validál minden input mezőt, és létrehoz egy új rekordot a `users` táblában
-- **login()**: Ellenőrzi a jelszót (`Hash::check()`), generál egy Sanctum tokent a `createToken()` metódussal
-- **logout()**: Törli a felhasználó összes aktív tokenét az adatbázisból
+- **register()**: Hash-eli a jelszót (`Hash::make()`), validál minden input mezőt, és automatikusan JWT tokent generál
+- **login()**: JWT token generálás (`JWTAuth::attempt()`), amely ellenőrzi az email/jelszó kombinációt
+- **logout()**: Invalidálja a JWT tokent (blacklist-re kerül)
+- **refresh()**: Új JWT token generálása a régi alapján, session megőrzése
 
 ---
 
@@ -916,7 +1096,7 @@ class UserController extends Controller
      * 
      * A bejelentkezett felhasználó adatait adja vissza.
      * A $request->user() metódus automatikusan visszaadja az
-     * autentifikált felhasználót a Sanctum token alapján.
+     * autentifikált felhasználót a JWT token alapján.
      */
     public function me(Request $request)
     {
@@ -1399,12 +1579,12 @@ class AuthTest extends TestCase
 
         // ASSERT: Ellenőrizzük a sikeres választ
         $response->assertStatus(200)
-                 ->assertJsonStructure(['access_token', 'token_type']);
+                 ->assertJsonStructure(['access_token', 'token_type', 'expires_in', 'user']);
 
-        // Ellenőrizzük, hogy létrejött-e token az adatbázisban
-        $this->assertDatabaseHas('personal_access_tokens', [
-            'tokenable_id' => $user->id,
-        ]);
+        // JWT token ellenőrzése - a token formátum helyes-e
+        $token = $response->json('access_token');
+        $this->assertNotEmpty($token);
+        $this->assertStringContainsString('.', $token); // JWT 3 részből áll
     }
 
     /**

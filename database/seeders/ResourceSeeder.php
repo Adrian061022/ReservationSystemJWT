@@ -13,6 +13,6 @@ class ResourceSeeder extends Seeder
      */
     public function run(): void
     {
-      Resource::factory(5)->create(); // 5 erőforrás
+     // Resource::factory(5)->create(); // 5 erőforrás
     }
 }

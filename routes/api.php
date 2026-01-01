@@ -11,11 +11,15 @@ Route::get('/hello', function (Request $request) {
     return response()->json(['message' => 'API works!']);
 });
 
+// Public routes
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
-Route::middleware('auth:sanctum')->group(function () {
+// Protected routes with JWT authentication
+Route::middleware('auth:api')->group(function () {
+    // Auth routes
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::post('/refresh', [AuthController::class, 'refresh']);
 
     // Reservations CRUD
     Route::apiResource('reservations', ReservationController::class);
@@ -37,6 +41,4 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/resources', [ResourceController::class, 'store']);
     Route::put('/resources/{resource}', [ResourceController::class, 'update']);
     Route::delete('/resources/{resource}', [ResourceController::class, 'destroy']);
-
-
 });
