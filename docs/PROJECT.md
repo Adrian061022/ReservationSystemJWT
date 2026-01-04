@@ -240,6 +240,8 @@ class User extends Authenticatable implements JWTSubject
 - **POST** `/register` - Regisztrációhoz (visszaad JWT tokent)
 - **POST** `/login` - Bejelentkezéshez (visszaad JWT tokent)
 
+<img width="538" height="131" alt="image" src="https://github.com/user-attachments/assets/f8dbb8d2-7c56-42d0-807c-4e988b251b73" />
+
 ### Védett végpontok (JWT token szükséges):
 - **POST** `/logout` - Kijelentkezés (token invalidálás)
 - **POST** `/refresh` - JWT token frissítése
@@ -259,7 +261,7 @@ class User extends Authenticatable implements JWTSubject
 - **PUT** `/reservations/{id}` - Foglalás módosítása
 - **DELETE** `/reservations/{id}` - Foglalás törlése
 
-<img width="538" height="131" alt="image" src="https://github.com/user-attachments/assets/f8dbb8d2-7c56-42d0-807c-4e988b251b73" />
+
 
 
 ### Hibák kezelése:
@@ -369,7 +371,8 @@ Bejelentkezés e-mail címmel és jelszóval.
 > - Logout-nál invalidálódik (blacklist)
 
 ---
-<img width="703" height="500" alt="image" src="https://github.com/user-attachments/assets/83ce5cdb-df73-4b42-8e4c-f262a24f8948" />
+<img width="731" height="525" alt="image" src="https://github.com/user-attachments/assets/9a32e9b8-06f1-4730-885d-e69868def9ae" />
+
 
 ### **POST** `/logout` - Kijelentkezés
 
