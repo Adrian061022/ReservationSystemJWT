@@ -371,7 +371,8 @@ Bejelentkezés e-mail címmel és jelszóval.
 > - Logout-nál invalidálódik (blacklist)
 
 ---
-<img width="703" height="500" alt="image" src="https://github.com/user-attachments/assets/83ce5cdb-df73-4b42-8e4c-f262a24f8948" />
+<img width="731" height="525" alt="image" src="https://github.com/user-attachments/assets/9a32e9b8-06f1-4730-885d-e69868def9ae" />
+
 
 ### **POST** `/logout` - Kijelentkezés
 
