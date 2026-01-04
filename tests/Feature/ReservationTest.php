@@ -9,10 +9,17 @@ use App\Models\User;
 use App\Models\Resource;
 use App\Models\Reservation;
 use Carbon\Carbon;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class ReservationTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function actingAsJWT(User $user)
+    {
+        $token = JWTAuth::fromUser($user);
+        return $this->withHeader('Authorization', 'Bearer ' . $token);
+    }
 
     public function test_user_list_own_reservations()
     {
@@ -25,8 +32,8 @@ class ReservationTest extends TestCase
             'resource_id' => $resource->id
         ]);
 
-        // ACT: Foglalások lekérése
-        $response = $this->actingAs($user)->getJson('/api/reservations');
+        // ACT: Foglalások lekérése JWT tokennel
+        $response = $this->actingAsJWT($user)->getJson('/api/reservations');
 
         // ASSERT: Csak a saját foglalásait látja
         $response->assertStatus(200)
@@ -44,8 +51,8 @@ class ReservationTest extends TestCase
         Reservation::factory()->create(['user_id' => $user1->id, 'resource_id' => $resource->id]);
         Reservation::factory()->create(['user_id' => $user2->id, 'resource_id' => $resource->id]);
 
-        // ACT: Foglalások lekérése adminként
-        $response = $this->actingAs($admin)->getJson('/api/reservations');
+        // ACT: Foglalások lekérése adminként JWT tokennel
+        $response = $this->actingAsJWT($admin)->getJson('/api/reservations');
 
         // ASSERT: Összes foglalást látja
         $response->assertStatus(200)
@@ -62,8 +69,8 @@ class ReservationTest extends TestCase
             'resource_id' => $resource->id
         ]);
 
-        // ACT: Saját foglalás megtekintése
-        $response = $this->actingAs($user)->getJson("/api/reservations/{$reservation->id}");
+        // ACT: Saját foglalás megtekintése JWT tokennel
+        $response = $this->actingAsJWT($user)->getJson("/api/reservations/{$reservation->id}");
 
         // ASSERT: Megjeleníti a foglalást
         $response->assertStatus(200)
@@ -81,8 +88,8 @@ class ReservationTest extends TestCase
             'resource_id' => $resource->id
         ]);
 
-        // ACT: Másik felhasználó foglalásának megtekintése
-        $response = $this->actingAs($user1)->getJson("/api/reservations/{$reservation->id}");
+        // ACT: Másik felhasználó foglalásának megtekintése JWT tokennel
+        $response = $this->actingAsJWT($user1)->getJson("/api/reservations/{$reservation->id}");
 
         // ASSERT: Elutasítás
         $response->assertStatus(403)
@@ -98,8 +105,8 @@ class ReservationTest extends TestCase
         $startTime = Carbon::now()->addHours(2);
         $endTime = $startTime->copy()->addHours(1);
 
-        // ACT: Foglalás létrehozása
-        $response = $this->actingAs($user)->postJson('/api/reservations', [
+        // ACT: Foglalás létrehozása JWT tokennel
+        $response = $this->actingAsJWT($user)->postJson('/api/reservations', [
             'resource_id' => $resource->id,
             'start_time' => $startTime,
             'end_time' => $endTime
@@ -126,8 +133,8 @@ class ReservationTest extends TestCase
         $startTime = Carbon::now()->subHours(1);
         $endTime = $startTime->copy()->addHours(1);
 
-        // ACT: Múltbeli foglalás kísérlete
-        $response = $this->actingAs($user)->postJson('/api/reservations', [
+        // ACT: Múltbeli foglalás kísérlете JWT tokennel
+        $response = $this->actingAsJWT($user)->postJson('/api/reservations', [
             'resource_id' => $resource->id,
             'start_time' => $startTime,
             'end_time' => $endTime
@@ -152,8 +159,8 @@ class ReservationTest extends TestCase
         $newStartTime = Carbon::now()->addHours(5);
         $newEndTime = $newStartTime->copy()->addHours(2);
 
-        // ACT: Foglalás frissítése
-        $response = $this->actingAs($user)->putJson("/api/reservations/{$reservation->id}", [
+        // ACT: Foglalás frissítése JWT tokennel
+        $response = $this->actingAsJWT($user)->putJson("/api/reservations/{$reservation->id}", [
             'start_time' => $newStartTime,
             'end_time' => $newEndTime
         ]);
@@ -181,8 +188,8 @@ class ReservationTest extends TestCase
             'status' => 'pending'
         ]);
 
-        // ACT: Status módosítása adminként
-        $response = $this->actingAs($admin)->putJson("/api/reservations/{$reservation->id}", [
+        // ACT: Status módosítása adminként JWT tokennel
+        $response = $this->actingAsJWT($admin)->putJson("/api/reservations/{$reservation->id}", [
             'status' => 'approved'
         ]);
 
@@ -202,8 +209,8 @@ class ReservationTest extends TestCase
             'status' => 'pending'
         ]);
 
-        // ACT: Status módosítási kísérlete
-        $response = $this->actingAs($user)->putJson("/api/reservations/{$reservation->id}", [
+        // ACT: Status módosítási kísérlете JWT tokennel
+        $response = $this->actingAsJWT($user)->putJson("/api/reservations/{$reservation->id}", [
             'status' => 'approved'
         ]);
 
@@ -225,14 +232,14 @@ class ReservationTest extends TestCase
             'resource_id' => $resource->id
         ]);
 
-        // ACT: Foglalás törlése
-        $response = $this->actingAs($user)->deleteJson("/api/reservations/{$reservation->id}");
+        // ACT: Foglalás törlése JWT tokennel
+        $response = $this->actingAsJWT($user)->deleteJson("/api/reservations/{$reservation->id}");
 
         // ASSERT: Foglalás törlődik
         $response->assertStatus(200);
 
-        // Ellenőrizzük az adatbázist
-        $this->assertDatabaseMissing('reservations', ['id' => $reservation->id]);
+        // assertSoftDeleted: ellenőrzi, hogy a deleted_at mező ki van töltve
+        $this->assertSoftDeleted('reservations', ['id' => $reservation->id]);
     }
 
     public function test_unauthenticated_cannot_create_reservation()

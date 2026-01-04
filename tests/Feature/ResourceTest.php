@@ -7,10 +7,17 @@ use Illuminate\Foundation\Testing\WithFaker;
 use Tests\TestCase;
 use App\Models\User;
 use App\Models\Resource;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class ResourceTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function actingAsJWT(User $user)
+    {
+        $token = JWTAuth::fromUser($user);
+        return $this->withHeader('Authorization', 'Bearer ' . $token);
+    }
 
     public function test_list_all_resources()
     {
@@ -19,8 +26,8 @@ class ResourceTest extends TestCase
         
         $user = User::factory()->create();
 
-        // ACT: Erőforrások lekérése
-        $response = $this->actingAs($user)->getJson('/api/resources');
+        // ACT: Erőforrások lekérése JWT tokennel
+        $response = $this->actingAsJWT($user)->getJson('/api/resources');
 
         // ASSERT: Ellenőrizzük a választ
         $response->assertStatus(200)
@@ -37,8 +44,8 @@ class ResourceTest extends TestCase
         
         $user = User::factory()->create();
 
-        // ACT: Erőforrás lekérése
-        $response = $this->actingAs($user)->getJson("/api/resources/{$resource->id}");
+        // ACT: Erőforrás lekérése JWT tokennel
+        $response = $this->actingAsJWT($user)->getJson("/api/resources/{$resource->id}");
 
         // ASSERT: Ellenőrizzük a választ
         $response->assertStatus(200)
@@ -53,8 +60,8 @@ class ResourceTest extends TestCase
         // ARRANGE: Admin felhasználó
         $admin = User::factory()->create(['is_admin' => true]);
 
-        // ACT: Erőforrás létrehozása
-        $response = $this->actingAs($admin)->postJson('/api/resources', [
+        // ACT: Erőforrás létrehozása JWT tokennel
+        $response = $this->actingAsJWT($admin)->postJson('/api/resources', [
             'name' => 'New Resource',
             'type' => 'equipment',
             'description' => 'A test resource',
@@ -77,8 +84,8 @@ class ResourceTest extends TestCase
         // ARRANGE: Normál felhasználó
         $user = User::factory()->create(['is_admin' => false]);
 
-        // ACT: Erőforrás létrehozási kísérlete
-        $response = $this->actingAs($user)->postJson('/api/resources', [
+        // ACT: Erőforrás létrehozási kísérlете JWT tokennel
+        $response = $this->actingAsJWT($user)->postJson('/api/resources', [
             'name' => 'Unauthorized Resource',
             'type' => 'equipment'
         ]);
@@ -97,8 +104,8 @@ class ResourceTest extends TestCase
             'available' => true
         ]);
 
-        // ACT: Erőforrás frissítése
-        $response = $this->actingAs($admin)->putJson("/api/resources/{$resource->id}", [
+        // ACT: Erőforrás frissítése JWT tokennel
+        $response = $this->actingAsJWT($admin)->putJson("/api/resources/{$resource->id}", [
             'name' => 'Updated Name',
             'available' => false
         ]);
@@ -123,15 +130,15 @@ class ResourceTest extends TestCase
         $admin = User::factory()->create(['is_admin' => true]);
         $resource = Resource::factory()->create();
 
-        // ACT: Erőforrás törlése
-        $response = $this->actingAs($admin)->deleteJson("/api/resources/{$resource->id}");
+        // ACT: Erőforrás törlése JWT tokennel
+        $response = $this->actingAsJWT($admin)->deleteJson("/api/resources/{$resource->id}");
 
         // ASSERT: Ellenőrizzük az eredményt
         $response->assertStatus(200)
                  ->assertJson(['message' => 'Erőforrás törölve.']);
 
-        // Ellenőrizzük az adatbázist
-        $this->assertDatabaseMissing('resources', ['id' => $resource->id]);
+        // assertSoftDeleted: ellenőrzi, hogy a deleted_at mező ki van töltve
+        $this->assertSoftDeleted('resources', ['id' => $resource->id]);
     }
 
     public function test_non_admin_cannot_update_resource()
@@ -140,8 +147,8 @@ class ResourceTest extends TestCase
         $user = User::factory()->create(['is_admin' => false]);
         $resource = Resource::factory()->create();
 
-        // ACT: Erőforrás módosítási kísérlete
-        $response = $this->actingAs($user)->putJson("/api/resources/{$resource->id}", [
+        // ACT: Erőforrás módosítási kísérlете JWT tokennel
+        $response = $this->actingAsJWT($user)->putJson("/api/resources/{$resource->id}", [
             'name' => 'Hacked Name'
         ]);
 

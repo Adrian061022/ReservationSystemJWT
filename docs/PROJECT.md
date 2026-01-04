@@ -1504,6 +1504,7 @@ use Illuminate\Foundation\Testing\WithFaker;
 use Tests\TestCase;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class AuthTest extends TestCase
 {
@@ -1577,14 +1578,13 @@ class AuthTest extends TestCase
             'password' => $password, // Plain text jelszó
         ]);
 
-        // ASSERT: Ellenőrizzük a sikeres választ
+        // ASSERT: Ellenőrizzük a sikeres választ és a JWT struktúráját
         $response->assertStatus(200)
-                 ->assertJsonStructure(['access_token', 'token_type', 'expires_in', 'user']);
-
-        // JWT token ellenőrzése - a token formátum helyes-e
-        $token = $response->json('access_token');
-        $this->assertNotEmpty($token);
-        $this->assertStringContainsString('.', $token); // JWT 3 részből áll
+                 ->assertJsonStructure([
+                     'access_token',  // JWT token
+                     'token_type',     // "bearer"
+                     'expires_in'      // Másodpercek (3600)
+                 ]);
     }
 
     /**
@@ -1637,16 +1637,26 @@ use Illuminate\Foundation\Testing\WithFaker;
 use Tests\TestCase;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class UserTest extends TestCase
 {
     use RefreshDatabase;
 
     /**
+     * Helper metódus JWT token generálásához és authentikált kérésekhez
+     */
+    protected function actingAsJWT(User $user)
+    {
+        $token = JWTAuth::fromUser($user);
+        return $this->withHeader('Authorization', 'Bearer ' . $token);
+    }
+
+    /**
      * Profil lekérés teszt
      * 
      * Ellenőrzi, hogy a bejelentkezett felhasználó
-     * le tudja-e kérni saját profilját.
+     * le tudja-e kérni saját profilját JWT tokennel.
      */
     public function test_get_current_user_profile()
     {
@@ -1656,9 +1666,8 @@ class UserTest extends TestCase
             'name' => 'Test User'
         ]);
 
-        // ACT: Profil lekérése autentifikálva
-        // actingAs() metódus: szimulálja a bejelentkezést
-        $response = $this->actingAs($user)->getJson('/api/users/me');
+        // ACT: Profil lekérése JWT tokennel
+        $response = $this->actingAsJWT($user)->getJson('/api/users/me');
 
         // ASSERT: Ellenőrizzük a választ
         $response->assertStatus(200)
@@ -1683,8 +1692,8 @@ class UserTest extends TestCase
             'name' => 'Old Name'
         ]);
 
-        // ACT: Profil frissítése új adatokkal
-        $response = $this->actingAs($user)->putJson('/api/users/me', [
+        // ACT: Profil frissítése új adatokkal JWT tokennel
+        $response = $this->actingAsJWT($user)->putJson('/api/users/me', [
             'name' => 'New Name',
             'phone' => '+36201234567'
         ]);
@@ -1707,7 +1716,7 @@ class UserTest extends TestCase
      * Admin felhasználó listázás teszt
      * 
      * Ellenőrzi, hogy admin jogosultsággal rendelkező
-     * felhasználó láthatja-e az összes felhasználót.
+     * felhasználó láthatja-e az összes felhasználót JWT tokennel.
      */
     public function test_admin_list_all_users()
     {
@@ -1715,8 +1724,8 @@ class UserTest extends TestCase
         $admin = User::factory()->create(['is_admin' => true]);
         User::factory()->count(3)->create(['is_admin' => false]);
 
-        // ACT: Felhasználók lekérése adminként
-        $response = $this->actingAs($admin)->getJson('/api/users');
+        // ACT: Felhasználók lekérése adminként JWT tokennel
+        $response = $this->actingAsJWT($admin)->getJson('/api/users');
 
         // ASSERT: Ellenőrizzük, hogy 4 felhasználó van (1 admin + 3 normál)
         $response->assertStatus(200)
@@ -1727,15 +1736,15 @@ class UserTest extends TestCase
      * Nem admin felhasználó hozzáférés teszt
      * 
      * Ellenőrzi, hogy normál felhasználó nem férhet hozzá
-     * az admin funkciókhoz.
+     * az admin funkciókhoz JWT authentikációval sem.
      */
     public function test_non_admin_cannot_list_users()
     {
         // ARRANGE: Normál felhasználó (nem admin)
         $user = User::factory()->create(['is_admin' => false]);
 
-        // ACT: Próbálja lekérni az összes felhasználót
-        $response = $this->actingAs($user)->getJson('/api/users');
+        // ACT: Próbálja lekérni az összes felhasználót JWT tokennel
+        $response = $this->actingAsJWT($user)->getJson('/api/users');
 
         // ASSERT: 403 Forbidden válasz
         $response->assertStatus(403)
@@ -1746,7 +1755,7 @@ class UserTest extends TestCase
      * Admin konkrét felhasználó megtekintés teszt
      * 
      * Admin felhasználó bármely más felhasználó
-     * adatait megtekintheti.
+     * adatait megtekintheti JWT tokennel.
      */
     public function test_admin_show_specific_user()
     {
@@ -1754,8 +1763,8 @@ class UserTest extends TestCase
         $admin = User::factory()->create(['is_admin' => true]);
         $user = User::factory()->create(['name' => 'Target User']);
 
-        // ACT: Konkrét felhasználó lekérése
-        $response = $this->actingAs($admin)->getJson("/api/users/{$user->id}");
+        // ACT: Konkrét felhasználó lekérése JWT tokennel
+        $response = $this->actingAsJWT($admin)->getJson("/api/users/{$user->id}");
 
         // ASSERT: Ellenőrizzük a választ
         $response->assertStatus(200)
@@ -1765,7 +1774,7 @@ class UserTest extends TestCase
     /**
      * Admin felhasználó törlés teszt
      * 
-     * Ellenőrzi, hogy admin törölhet-e felhasználót.
+     * Ellenőrzi, hogy admin törölhet-e felhasználót JWT authentikációval.
      * Soft delete ellenőrzés: deleted_at mező kitöltve.
      */
     public function test_admin_delete_user()
@@ -1774,8 +1783,8 @@ class UserTest extends TestCase
         $admin = User::factory()->create(['is_admin' => true]);
         $user = User::factory()->create();
 
-        // ACT: Felhasználó törlése
-        $response = $this->actingAs($admin)->deleteJson("/api/users/{$user->id}");
+        // ACT: Felhasználó törlése JWT tokennel
+        $response = $this->actingAsJWT($admin)->deleteJson("/api/users/{$user->id}");
 
         // ASSERT: Sikeres törlés és soft delete ellenőrzés
         $response->assertStatus(200)
@@ -1802,7 +1811,9 @@ class UserTest extends TestCase
 ```
 
 **Tesztelési Technikák:**
-- **actingAs()**: Szimulálja a bejelentkezést, nem kell tokent generálni
+- **actingAsJWT()**: JWT token generálása és Bearer authentikáció (Sanctum actingAs() helyett)
+- **JWTAuth::fromUser()**: JWT token generálása adott felhasználóhoz
+- **withHeader()**: Authorization fejléc hozzáadása Bearer tokennel
 - **assertJsonCount()**: Ellenőrzi a JSON array elemszámát
 - **assertSoftDeleted()**: Soft delete ellenőrzés (deleted_at mező)
 - **count()**: Factory metódus, több rekord létrehozására
@@ -1811,7 +1822,7 @@ class UserTest extends TestCase
 
 ### 3. ResourceTest - Erőforrás Kezelés Tesztek
 
-A `ResourceTest` az erőforrások CRUD műveleteit és jogosultság-kezelését teszteli.
+A `ResourceTest` az erőforrások CRUD műveleteit és jogosultság-kezelését teszteli JWT autentifikációval.
 
 ```php
 <?php
@@ -1823,15 +1834,22 @@ use Illuminate\Foundation\Testing\WithFaker;
 use Tests\TestCase;
 use App\Models\User;
 use App\Models\Resource;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class ResourceTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function actingAsJWT(User $user)
+    {
+        $token = JWTAuth::fromUser($user);
+        return $this->withHeader('Authorization', 'Bearer ' . $token);
+    }
+
     /**
      * Erőforrások listázás teszt
      * 
-     * Minden autentifikált felhasználó láthatja az erőforrásokat.
+     * Minden autentifikált felhasználó láthatja az erőforrásokat JWT tokennel.
      */
     public function test_list_all_resources()
     {
@@ -1839,8 +1857,8 @@ class ResourceTest extends TestCase
         Resource::factory()->count(3)->create();
         $user = User::factory()->create();
 
-        // ACT: Erőforrások lekérése
-        $response = $this->actingAs($user)->getJson('/api/resources');
+        // ACT: Erőforrások lekérése JWT tokennel
+        $response = $this->actingAsJWT($user)->getJson('/api/resources');
 
         // ASSERT: 3 erőforrás a válaszban
         $response->assertStatus(200)
@@ -1850,7 +1868,7 @@ class ResourceTest extends TestCase
     /**
      * Konkrét erőforrás megtekintés teszt
      * 
-     * Teszteli a Route Model Binding működését.
+     * Teszteli a Route Model Binding működését JWT authentikációval.
      */
     public function test_show_specific_resource()
     {
@@ -1861,8 +1879,8 @@ class ResourceTest extends TestCase
         ]);
         $user = User::factory()->create();
 
-        // ACT: Konkrét erőforrás lekérése ID alapján
-        $response = $this->actingAs($user)->getJson("/api/resources/{$resource->id}");
+        // ACT: Konkrét erőforrás lekérése ID alapján JWT tokennel
+        $response = $this->actingAsJWT($user)->getJson("/api/resources/{$resource->id}");
 
         // ASSERT: Ellenőrizzük a konkrét erőforrás adatait
         $response->assertStatus(200)
@@ -1875,15 +1893,15 @@ class ResourceTest extends TestCase
     /**
      * Admin erőforrás létrehozás teszt
      * 
-     * Csak admin jogosultsággal lehet erőforrást létrehozni.
+     * Csak admin jogosultsággal lehet erőforrást létrehozni JWT tokennel.
      */
     public function test_admin_create_resource()
     {
         // ARRANGE: Admin felhasználó
         $admin = User::factory()->create(['is_admin' => true]);
 
-        // ACT: Új erőforrás létrehozása
-        $response = $this->actingAs($admin)->postJson('/api/resources', [
+        // ACT: Új erőforrás létrehozása JWT tokennel
+        $response = $this->actingAsJWT($admin)->postJson('/api/resources', [
             'name' => 'New Resource',
             'type' => 'equipment',
             'description' => 'A test resource',
@@ -1913,8 +1931,8 @@ class ResourceTest extends TestCase
         // ARRANGE: Normál felhasználó
         $user = User::factory()->create(['is_admin' => false]);
 
-        // ACT: Erőforrás létrehozási kísérlet
-        $response = $this->actingAs($user)->postJson('/api/resources', [
+        // ACT: Erőforrás létrehozási kísérlet JWT tokennel
+        $response = $this->actingAsJWT($user)->postJson('/api/resources', [
             'name' => 'Unauthorized Resource',
             'type' => 'equipment'
         ]);
@@ -1929,7 +1947,7 @@ class ResourceTest extends TestCase
     /**
      * Admin erőforrás módosítás teszt
      * 
-     * Admin módosíthatja az erőforrások adatait.
+     * Admin módosíthatja az erőforrások adatait JWT tokennel.
      */
     public function test_admin_update_resource()
     {
@@ -1940,8 +1958,8 @@ class ResourceTest extends TestCase
             'available' => true
         ]);
 
-        // ACT: Erőforrás frissítése
-        $response = $this->actingAs($admin)->putJson(
+        // ACT: Erőforrás frissítése JWT tokennel
+        $response = $this->actingAsJWT($admin)->putJson(
             "/api/resources/{$resource->id}", 
             [
                 'name' => 'Updated Name',
@@ -1967,7 +1985,7 @@ class ResourceTest extends TestCase
      * Admin erőforrás törlés teszt
      * 
      * Admin törölhet erőforrásokat.
-     * Hard delete: teljesen törlődik az adatbázisból.
+     * Soft delete: csak a deleted_at mező kitöltődik.
      */
     public function test_admin_delete_resource()
     {
@@ -1975,8 +1993,8 @@ class ResourceTest extends TestCase
         $admin = User::factory()->create(['is_admin' => true]);
         $resource = Resource::factory()->create();
 
-        // ACT: Erőforrás törlése
-        $response = $this->actingAs($admin)->deleteJson(
+        // ACT: Erőforrás törlése JWT tokennel
+        $response = $this->actingAsJWT($admin)->deleteJson(
             "/api/resources/{$resource->id}"
         );
 
@@ -1984,8 +2002,8 @@ class ResourceTest extends TestCase
         $response->assertStatus(200)
                  ->assertJson(['message' => 'Erőforrás törölve.']);
 
-        // assertDatabaseMissing: ellenőrzi, hogy a rekord nem létezik
-        $this->assertDatabaseMissing('resources', ['id' => $resource->id]);
+        // assertSoftDeleted: ellenőrzi, hogy a deleted_at mező ki van töltve
+        $this->assertSoftDeleted('resources', ['id' => $resource->id]);
     }
 
     /**
@@ -1999,8 +2017,8 @@ class ResourceTest extends TestCase
         $user = User::factory()->create(['is_admin' => false]);
         $resource = Resource::factory()->create();
 
-        // ACT: Módosítási kísérlet
-        $response = $this->actingAs($user)->putJson(
+        // ACT: Módosítási kísérlet JWT tokennel
+        $response = $this->actingAsJWT($user)->putJson(
             "/api/resources/{$resource->id}", 
             ['name' => 'Hacked Name']
         );
@@ -2029,7 +2047,7 @@ class ResourceTest extends TestCase
 ```
 
 **Tesztelési Jellemzők:**
-- **assertDatabaseMissing()**: Hard delete ellenőrzése (teljesen törölt rekord)
+- **assertSoftDeleted()**: Soft delete ellenőrzése (deleted_at mező kitöltve)
 - **Route Model Binding Test**: A `show()` metódus automatikus model lekérést tesztel
 - **Admin vs Normál User**: Minden művelethez külön teszt a jogosultság ellenőrzésre
 
@@ -2051,15 +2069,22 @@ use App\Models\User;
 use App\Models\Resource;
 use App\Models\Reservation;
 use Carbon\Carbon;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class ReservationTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function actingAsJWT(User $user)
+    {
+        $token = JWTAuth::fromUser($user);
+        return $this->withHeader('Authorization', 'Bearer ' . $token);
+    }
+
     /**
      * Felhasználó saját foglalásai teszt
      * 
-     * Normál felhasználó csak saját foglalásait látja.
+     * Normál felhasználó csak saját foglalásait látja JWT tokennel.
      */
     public function test_user_list_own_reservations()
     {
@@ -2073,8 +2098,8 @@ class ReservationTest extends TestCase
             'resource_id' => $resource->id
         ]);
 
-        // ACT: Foglalások lekérése
-        $response = $this->actingAs($user)->getJson('/api/reservations');
+        // ACT: Foglalások lekérése JWT tokennel
+        $response = $this->actingAsJWT($user)->getJson('/api/reservations');
 
         // ASSERT: Csak a 2 saját foglalást látja
         $response->assertStatus(200)
@@ -2104,8 +2129,8 @@ class ReservationTest extends TestCase
             'resource_id' => $resource->id
         ]);
 
-        // ACT: Foglalások lekérése adminként
-        $response = $this->actingAs($admin)->getJson('/api/reservations');
+        // ACT: Foglalások lekérése adminként JWT tokennel
+        $response = $this->actingAsJWT($admin)->getJson('/api/reservations');
 
         // ASSERT: Mind a 2 foglalást látja
         $response->assertStatus(200)
@@ -2115,7 +2140,7 @@ class ReservationTest extends TestCase
     /**
      * Saját foglalás megtekintés teszt
      * 
-     * Felhasználó megtekintheti saját foglalását.
+     * Felhasználó megtekintheti saját foglalását JWT tokennel.
      */
     public function test_show_own_reservation()
     {
@@ -2127,8 +2152,8 @@ class ReservationTest extends TestCase
             'resource_id' => $resource->id
         ]);
 
-        // ACT: Saját foglalás lekérése
-        $response = $this->actingAs($user)->getJson(
+        // ACT: Saját foglalás lekérése JWT tokennel
+        $response = $this->actingAsJWT($user)->getJson(
             "/api/reservations/{$reservation->id}"
         );
 
@@ -2143,7 +2168,7 @@ class ReservationTest extends TestCase
     /**
      * Más foglalása nem látható teszt
      * 
-     * Normál felhasználó nem tekinthet meg más foglalását.
+     * Normál felhasználó nem tekinthet meg más foglalását JWT tokennel sem.
      */
     public function test_user_cannot_view_other_user_reservation()
     {
@@ -2156,8 +2181,8 @@ class ReservationTest extends TestCase
             'resource_id' => $resource->id
         ]);
 
-        // ACT: user1 próbálja megtekinteni user2 foglalását
-        $response = $this->actingAs($user1)->getJson(
+        // ACT: user1 próbálja megtekinteni user2 foglalását JWT tokennel
+        $response = $this->actingAsJWT($user1)->getJson(
             "/api/reservations/{$reservation->id}"
         );
 
@@ -2184,8 +2209,8 @@ class ReservationTest extends TestCase
         $startTime = Carbon::now()->addHours(2);
         $endTime = $startTime->copy()->addHours(1);
 
-        // ACT: Foglalás létrehozása
-        $response = $this->actingAs($user)->postJson('/api/reservations', [
+        // ACT: Foglalás létrehozása JWT tokennel
+        $response = $this->actingAsJWT($user)->postJson('/api/reservations', [
             'resource_id' => $resource->id,
             'start_time' => $startTime,
             'end_time' => $endTime
@@ -2221,8 +2246,8 @@ class ReservationTest extends TestCase
         $startTime = Carbon::now()->subHours(1); // 1 órával ezelőtt
         $endTime = $startTime->copy()->addHours(1);
 
-        // ACT: Múltbeli foglalás kísérlete
-        $response = $this->actingAs($user)->postJson('/api/reservations', [
+        // ACT: Múltbeli foglalás kísérlete JWT tokennel
+        $response = $this->actingAsJWT($user)->postJson('/api/reservations', [
             'resource_id' => $resource->id,
             'start_time' => $startTime,
             'end_time' => $endTime
@@ -2253,8 +2278,8 @@ class ReservationTest extends TestCase
         $newStartTime = Carbon::now()->addHours(5);
         $newEndTime = $newStartTime->copy()->addHours(2);
 
-        // ACT: Foglalás frissítése
-        $response = $this->actingAs($user)->putJson(
+        // ACT: Foglalás frissítése JWT tokennel
+        $response = $this->actingAsJWT($user)->putJson(
             "/api/reservations/{$reservation->id}", 
             [
                 'start_time' => $newStartTime,
@@ -2296,8 +2321,8 @@ class ReservationTest extends TestCase
             'status' => 'pending'
         ]);
 
-        // ACT: Status módosítása approved-ra
-        $response = $this->actingAs($admin)->putJson(
+        // ACT: Status módosítása approved-ra JWT tokennel
+        $response = $this->actingAsJWT($admin)->putJson(
             "/api/reservations/{$reservation->id}", 
             ['status' => 'approved']
         );
@@ -2323,8 +2348,8 @@ class ReservationTest extends TestCase
             'status' => 'pending'
         ]);
 
-        // ACT: Status módosítási kísérlet
-        $response = $this->actingAs($user)->putJson(
+        // ACT: Status módosítási kísérlet JWT tokennel
+        $response = $this->actingAsJWT($user)->putJson(
             "/api/reservations/{$reservation->id}", 
             ['status' => 'approved']
         );
@@ -2341,6 +2366,7 @@ class ReservationTest extends TestCase
      * Foglalás törlés teszt
      * 
      * Felhasználó törölheti saját foglalását.
+     * Soft delete: csak a deleted_at mező kitöltődik.
      */
     public function test_delete_reservation()
     {
@@ -2352,16 +2378,16 @@ class ReservationTest extends TestCase
             'resource_id' => $resource->id
         ]);
 
-        // ACT: Foglalás törlése
-        $response = $this->actingAs($user)->deleteJson(
+        // ACT: Foglalás törlése JWT tokennel
+        $response = $this->actingAsJWT($user)->deleteJson(
             "/api/reservations/{$reservation->id}"
         );
 
-        // ASSERT: Sikeres törlés (hard delete)
+        // ASSERT: Sikeres törlés
         $response->assertStatus(200);
 
-        // Ellenőrizzük, hogy nincs az adatbázisban
-        $this->assertDatabaseMissing('reservations', [
+        // assertSoftDeleted: ellenőrzi, hogy a deleted_at mező ki van töltve
+        $this->assertSoftDeleted('reservations', [
             'id' => $reservation->id
         ]);
     }

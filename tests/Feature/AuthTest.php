@@ -7,10 +7,12 @@ use Illuminate\Foundation\Testing\WithFaker;
 use Tests\TestCase;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class AuthTest extends TestCase
 {
     use RefreshDatabase;
+
     public function test_ping_endpoint_returns_ok()
     {
         // NOTE: Ez a teszt az /api/hello endpointra vonatkozik, amelyet az api.php-ban kell definiálni
@@ -40,28 +42,21 @@ class AuthTest extends TestCase
     public function test_login_with_valid_credentials()
     {
         // ARRANGE: Felhasználó létrehozása az adatbázisban
-        // Mivel a regisztrációs teszt csak egyszer fut, létre kell hozni egy felhasználót 
-        // minden login teszthez.
         $password = 'Jelszo_2025';
         $user = User::factory()->create([
             'email' => 'validuser@example.com',
-            'password' => Hash::make($password), // A jelszót hash-elni kell!
+            'password' => Hash::make($password),
         ]);
 
         // ACT: Bejelentkezési kérés
         $response = $this->postJson('/api/login', [
             'email' => 'validuser@example.com',
-            'password' => $password, // A bejelentkezéshez a plain text jelszót adjuk
+            'password' => $password,
         ]);
 
-        // ASSERT: Ellenőrizzük a státuszt és a válasz struktúráját
+        // ASSERT: Ellenőrizzük a státuszt és a válasz struktúráját (JWT)
         $response->assertStatus(200)
-                 ->assertJsonStructure(['access_token', 'token_type']);
-
-        // Opcionális: Ellenőrizzük, hogy létrejött-e token
-        $this->assertDatabaseHas('personal_access_tokens', [
-            'tokenable_id' => $user->id,
-        ]);
+                 ->assertJsonStructure(['access_token', 'token_type', 'expires_in']);
     }
 
     public function test_login_with_invalid_credentials()

@@ -7,21 +7,31 @@ use Illuminate\Foundation\Testing\WithFaker;
 use Tests\TestCase;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class UserTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * Helper metódus JWT token generálásához és authentikált kérésekhez
+     */
+    protected function actingAsJWT(User $user)
+    {
+        $token = JWTAuth::fromUser($user);
+        return $this->withHeader('Authorization', 'Bearer ' . $token);
+    }
+
     public function test_get_current_user_profile()
     {
-        // ARRANGE: Felhasználó létrehozása és bejelentkeztetése
+        // ARRANGE: Felhasználó létrehozása és JWT token generálása
         $user = User::factory()->create([
             'email' => 'user@example.com',
             'name' => 'Test User'
         ]);
 
-        // ACT: /users/me endpoint meghívása autentifikáció nélkül
-        $response = $this->actingAs($user)->getJson('/api/users/me');
+        // ACT: /users/me endpoint meghívása JWT tokennel
+        $response = $this->actingAsJWT($user)->getJson('/api/users/me');
 
         // ASSERT: Ellenőrizzük a választ
         $response->assertStatus(200)
@@ -40,8 +50,8 @@ class UserTest extends TestCase
             'name' => 'Old Name'
         ]);
 
-        // ACT: Profil frissítése
-        $response = $this->actingAs($user)->putJson('/api/users/me', [
+        // ACT: Profil frissítése JWT tokennel
+        $response = $this->actingAsJWT($user)->putJson('/api/users/me', [
             'name' => 'New Name',
             'phone' => '+36201234567'
         ]);
@@ -66,8 +76,8 @@ class UserTest extends TestCase
         $admin = User::factory()->create(['is_admin' => true]);
         User::factory()->count(3)->create(['is_admin' => false]);
 
-        // ACT: Felhasználók lekérése adminként
-        $response = $this->actingAs($admin)->getJson('/api/users');
+        // ACT: Felhasználók lekérése adminként JWT tokennel
+        $response = $this->actingAsJWT($admin)->getJson('/api/users');
 
         // ASSERT: Ellenőrizzük a választ
         $response->assertStatus(200)
@@ -79,8 +89,8 @@ class UserTest extends TestCase
         // ARRANGE: Normál felhasználó
         $user = User::factory()->create(['is_admin' => false]);
 
-        // ACT: Próbálunk felhasználókat lekérni
-        $response = $this->actingAs($user)->getJson('/api/users');
+        // ACT: Próbálunk felhasználókat lekérni JWT tokennel
+        $response = $this->actingAsJWT($user)->getJson('/api/users');
 
         // ASSERT: Ellenőrizzük az elutasítást
         $response->assertStatus(403)
@@ -93,8 +103,8 @@ class UserTest extends TestCase
         $admin = User::factory()->create(['is_admin' => true]);
         $user = User::factory()->create(['name' => 'Target User']);
 
-        // ACT: Felhasználó lekérése
-        $response = $this->actingAs($admin)->getJson("/api/users/{$user->id}");
+        // ACT: Felhasználó lekérése JWT tokennel
+        $response = $this->actingAsJWT($admin)->getJson("/api/users/{$user->id}");
 
         // ASSERT: Ellenőrizzük a választ
         $response->assertStatus(200)
@@ -107,8 +117,8 @@ class UserTest extends TestCase
         $admin = User::factory()->create(['is_admin' => true]);
         $user = User::factory()->create();
 
-        // ACT: Felhasználó törlése
-        $response = $this->actingAs($admin)->deleteJson("/api/users/{$user->id}");
+        // ACT: Felhasználó törlése JWT tokennel
+        $response = $this->actingAsJWT($admin)->deleteJson("/api/users/{$user->id}");
 
         // ASSERT: Ellenőrizzük az eredményt
         $response->assertStatus(200)
