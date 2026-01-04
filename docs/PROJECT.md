@@ -651,6 +651,7 @@ Egy específikus erőforrás részleteinak lekérése.
 ### **POST** `/resources` - Erőforrás Létrehozása (Admin Csak)
 
 Új erőforrás hozzáadása a rendszerhez.
+<img width="823" height="118" alt="image" src="https://github.com/user-attachments/assets/0663e2fa-f348-4ce6-b3ca-c11dd0502294" />
 
 **Kérés Törzse:**
 ```json
@@ -687,6 +688,8 @@ Egy específikus erőforrás részleteinak lekérése.
 ### **PUT** `/resources/{id}` - Erőforrás Módosítása (Admin Csak)
 
 Meglévő erőforrás adatainak frissítése.
+<img width="836" height="120" alt="image" src="https://github.com/user-attachments/assets/a68949db-8c57-468b-8711-ee647ebf61a8" />
+
 
 **Kérés Törzse:**
 ```json
@@ -716,6 +719,8 @@ Meglévő erőforrás adatainak frissítése.
 ### **DELETE** `/resources/{id}` - Erőforrás Törlése (Admin Csak)
 
 Erőforrás eltávolítása a rendszerből.
+<img width="839" height="119" alt="image" src="https://github.com/user-attachments/assets/e9ab3299-4068-4d96-b550-644f5f98d4e7" />
+
 
 **Válasz:** `200 OK`
 ```json
