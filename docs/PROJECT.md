@@ -38,7 +38,7 @@ vagy `http://localhost/reservationSystem/public/api` (XAMPP)
 - A `deleted_at` mező `NULL` értékű, ha a rekord aktív
 - Törléskor a `deleted_at` mező kitöltődik az aktuális timestamp-pel
 - A törölt rekordok alapértelmezetten nem jelennek meg a lekérdezésekben
-- A `withTrashed()` metódussal lekérhetők a törölt rekordok is
+
 
 ## Projekt Szerkezete
 
@@ -861,6 +861,7 @@ Meglévő foglalás adatainak frissítése.
 
 Foglalás eltávolítása.
 <img width="849" height="188" alt="image" src="https://github.com/user-attachments/assets/1ffc1303-0329-42a4-9aea-b7a49a5de7a9" />
+
 
 **Válasz:** `200 OK`
 ```json
