@@ -306,17 +306,17 @@ class User extends Authenticatable implements JWTSubject
 ### **POST** `/register` - Regisztráció
 
 Új felhasználó regisztrálása. Az új felhasználók alapértelmezetten normál felhasználók (`is_admin = false`).
-<img width="879" height="305" alt="image" src="https://github.com/user-attachments/assets/932be355-2340-43cf-87f9-a2ea603a1bfb" />
+<img width="847" height="271" alt="image" src="https://github.com/user-attachments/assets/834e3eb2-5524-457e-a8da-d34c109f9114" />
+
 
 
 **Kérés Törzse:**
 ```json
 {
-    "name":"Adrián3",
-    "email": "adrian32@gmail.com",
-    "phone": "21321312",
-    "password": "Jelszo_2025",
-    "password_confiramtion": "Jelszo_2025"
+    "name": "Test User",
+    "email": "test2@example.com",
+    "password": "password123",
+    "phone": "1234567890"
 }
 ```
 
@@ -325,14 +325,14 @@ class User extends Authenticatable implements JWTSubject
 {
     "message": "User registered successfully",
     "user": {
-        "name": "Adrián3",
-        "email": "adrian32@gmail.com",
-        "phone": "21321312",
-        "updated_at": "2025-12-07T17:40:51.000000Z",
-        "created_at": "2025-12-07T17:40:51.000000Z",
-        "id": 66
+        "name": "Test User",
+        "email": "test2@example.com",
+        "phone": "1234567890",
+        "updated_at": "2026-01-04T22:01:25.000000Z",
+        "created_at": "2026-01-04T22:01:25.000000Z",
+        "id": 23
     },
-    "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vMTI3...",
+    "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vMTI3LjAuMC4xOjgwMDAvYXBpL3JlZ2lzdGVyIiwiaWF0IjoxNzY3NTY0MDg1LCJleHAiOjE3Njc1Njc2ODUsIm5iZiI6MTc2NzU2NDA4NSwianRpIjoiak5qdU9xTlpVd1B1aFRMYyIsInN1YiI6IjIzIiwicHJ2IjoiMjNiZDVjODk0OWY2MDBhZGIzOWU3MDFjNDAwODcyZGI3YTU5NzZmNyJ9.E8DoGlQm19tUOj4DjM0uVTHo-3pDOh3uReVl5G5sMrs",
     "token_type": "bearer",
     "expires_in": 3600
 }
@@ -353,27 +353,32 @@ class User extends Authenticatable implements JWTSubject
 ### **POST** `/login` - Bejelentkezés
 
 Bejelentkezés e-mail címmel és jelszóval.
-<img width="851" height="330" alt="image" src="https://github.com/user-attachments/assets/4a91af5a-0805-480c-81c4-c423571dca26" />
+<img width="836" height="223" alt="image" src="https://github.com/user-attachments/assets/60ed20cb-dcdc-4616-b3a5-1f93c5655492" />
 
 **Kérés Törzse:**
 ```json
 {
-  "email": "john@example.com",
-  "password": "SecurePass_2025"
+    "email": "admin@example.com",
+    "password": "admin123"
 }
 ```
 
 **Válasz (sikeres bejelentkezés):** `200 OK`
 ```json
 {
-    "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vMTI3LjAuMC4xOjgwMDAvYXBpL2xvZ2luIiwiaWF0IjoxNzY3MjM1MTM2LCJleHAiOjE3NjcyMzg3MzYsIm5iZiI6MTc2NzIzNTEzNiwianRpIjoidjczTnZZMTJDT1BXZzY4RyIsInN1YiI6IjIyIiwicHJ2IjoiMjNiZDVjODk0OWY2MDBhZGIzOWU3MDFjNDAwODcyZGI3YTU5NzZmNyJ9.L1qjt1gkWaHUDv9Rwl_c5_tFam-7yEqegu2AUGE_5uQ",
+    "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vMTI3LjAuMC4xOjgwMDAvYXBpL2xvZ2luIiwiaWF0IjoxNzY3NTYyOTk5LCJleHAiOjE3Njc1NjY1OTksIm5iZiI6MTc2NzU2Mjk5OSwianRpIjoiRUNHMkhjQnVIc2ZaZ2Z1QiIsInN1YiI6IjIxIiwicHJ2IjoiMjNiZDVjODk0OWY2MDBhZGIzOWU3MDFjNDAwODcyZGI3YTU5NzZmNyJ9.Sc_UOIg5qcGrFXyzjou1643TDF6Q47clf1nJRelL-Bc",
     "token_type": "bearer",
     "expires_in": 3600,
     "user": {
-        "id": 22,
-        "name": "John Doe",
-        "email": "john@example.com",
-        "phone": "+36201234567"
+        "id": 21,
+        "name": "Admin User",
+        "email": "admin@example.com",
+        "phone": "+1.458.537.2618",
+        "is_admin": 1,
+        "email_verified_at": "2026-01-04T21:42:28.000000Z",
+        "created_at": "2026-01-04T21:42:28.000000Z",
+        "updated_at": "2026-01-04T21:42:28.000000Z",
+        "deleted_at": null
     }
 }
 ```
