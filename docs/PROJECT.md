@@ -989,8 +989,10 @@ protected $casts = [
 
 - UserFactory — Generál name, email, phone, bcrypt-elt alap jelszó.
 ```php
-'password' => bcrypt('password'),
+'name' => fake()->name(),
+'email' => fake()->unique()->safeEmail(),
 'phone' => fake()->phoneNumber(),
+'password' => bcrypt('password'), 
 ```
 
 - ResourceFactory — Generál név, típus, leírás és available boolean értéket.
