@@ -409,7 +409,8 @@ Bejelentkezés e-mail címmel és jelszóval.
 ### **POST** `/logout` - Kijelentkezés
 
 A jelenlegi autentikált felhasználó kijelentkeztetése és JWT tokenjének invalidálása.
-<img width="871" height="356" alt="image" src="https://github.com/user-attachments/assets/0ac0360d-2797-4ff9-8246-d625cac6b8a7" />
+<img width="848" height="104" alt="image" src="https://github.com/user-attachments/assets/e6df9f0c-e262-4711-841f-26261210da36" />
+
 
 
 **Válasz (sikeres kijelentkezés):** `200 OK`
@@ -424,17 +425,25 @@ A jelenlegi autentikált felhasználó kijelentkeztetése és JWT tokenjének in
 ### **POST** `/refresh` - JWT Token Frissítése
 
 Új JWT token generálása a régi token alapján, anélkül hogy újra be kellene jelentkezni.
+<img width="831" height="117" alt="image" src="https://github.com/user-attachments/assets/64e26782-e846-4d0a-8789-ce8b7632702f" />
+
 
 **Válasz:** `200 OK`
 ```json
 {
-    "access_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+    "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vMTI3LjAuMC4xOjgwMDAvYXBpL3JlZnJlc2giLCJpYXQiOjE3Njc1NjQzODIsImV4cCI6MTc2NzU2Nzk5MCwibmJmIjoxNzY3NTY0MzkwLCJqdGkiOiJBTTJ1Z2RidmFnRWlTWjVCIiwic3ViIjoiMjEiLCJwcnYiOiIyM2JkNWM4OTQ5ZjYwMGFkYjM5ZTcwMWM0MDA4NzJkYjdhNTk3NmY3In0.pJwhMQe21zWAaG1zMj0LHqpSbyhEAQZTfUD0QQ-Nc-8",
     "token_type": "bearer",
     "expires_in": 3600,
     "user": {
-        "id": 22,
-        "name": "John Doe",
-        "email": "john@example.com"
+        "id": 21,
+        "name": "Admin User",
+        "email": "admin@example.com",
+        "phone": "+1.458.537.2618",
+        "is_admin": 1,
+        "email_verified_at": "2026-01-04T21:42:28.000000Z",
+        "created_at": "2026-01-04T21:42:28.000000Z",
+        "updated_at": "2026-01-04T21:42:28.000000Z",
+        "deleted_at": null
     }
 }
 ```
@@ -444,15 +453,21 @@ A jelenlegi autentikált felhasználó kijelentkeztetése és JWT tokenjének in
 ### **GET** `/users/me` - Aktuális Profil
 
 Saját felhasználói profil adatainak lekérése.
-<img width="855" height="160" alt="image" src="https://github.com/user-attachments/assets/b75ff448-4842-4436-8f60-c2fa44e57f3d" />
+<img width="828" height="120" alt="image" src="https://github.com/user-attachments/assets/20f3b7b0-5435-4ff1-80bd-36d54181a1f7" />
+
 
 **Válasz:** `200 OK`
 ```json
 {
-    "id": 5,
-    "name": "John Doe",
-    "email": "john@example.com",
-    "phone": "+36201234567"
+    "id": 21,
+    "name": "Admin User",
+    "email": "admin@example.com",
+    "phone": "+1.458.537.2618",
+    "is_admin": 1,
+    "email_verified_at": "2026-01-04T21:42:28.000000Z",
+    "created_at": "2026-01-04T21:42:28.000000Z",
+    "updated_at": "2026-01-04T21:42:28.000000Z",
+    "deleted_at": null
 }
 ```
 
@@ -461,27 +476,31 @@ Saját felhasználói profil adatainak lekérése.
 ### **PUT** `/users/me` - Profil Frissítése
 
 Saját felhasználói adatok módosítása (név, e-mail, jelszó, telefonszám).
-<img width="861" height="325" alt="image" src="https://github.com/user-attachments/assets/6fda8113-37c2-4af3-9943-edc5dc4b2bb2" />
+<img width="828" height="109" alt="image" src="https://github.com/user-attachments/assets/f6311195-2da6-4245-807c-20967f355500" />
+
 
 
 
 **Kérés Törzse:**
 ```json
 {
-  "name": "New Name",
-  "email": "newemail@example.com",
-  "password": "NewPassword_2025",
-  "phone": "+36209876543"
+    "name": "Updated Name",
+    "phone": "9876543210"
 }
 ```
 
 **Válasz (sikeres frissítés):** `200 OK`
 ```json
-{
-  "id": 5,
-  "name": "New Name",
-  "email": "newemail@example.com",
-  "phone": "+36209876543"
+
+    "id": 21,
+    "name": "Updated Name",
+    "email": "admin@example.com",
+    "phone": "9876543210",
+    "is_admin": 1,
+    "email_verified_at": "2026-01-04T21:42:28.000000Z",
+    "created_at": "2026-01-04T21:42:28.000000Z",
+    "updated_at": "2026-01-04T22:08:01.000000Z",
+    "deleted_at": null
 }
 ```
 
@@ -492,21 +511,34 @@ Saját felhasználói adatok módosítása (név, e-mail, jelszó, telefonszám)
 ### **GET** `/users` - Összes Felhasználó Listázása (Admin Csak)
 
 Az összes felhasználó adatainak lekérése adminisztratív célokra.
-<img width="847" height="158" alt="image" src="https://github.com/user-attachments/assets/d76d9356-2169-411c-b927-23307a8dee50" />
+<img width="836" height="127" alt="image" src="https://github.com/user-attachments/assets/fc854d0a-b985-4eef-a44f-6fb9a07ce6e1" />
+
 
 **Válasz:** `200 OK`
 ```json
 [
-    {
+   {
         "id": 1,
-        "name": "admin",
-        "email": "admin@example.com"
+        "name": "Wallace Lynch",
+        "email": "royal95@example.net",
+        "phone": "(815) 623-6624",
+        "is_admin": 0,
+        "email_verified_at": "2026-01-04T21:38:35.000000Z",
+        "created_at": "2026-01-04T21:38:36.000000Z",
+        "updated_at": "2026-01-04T21:38:36.000000Z",
+        "deleted_at": null
     },
     {
-        "id": 5,
-        "name": "John Doe",
-        "email": "john@example.com"
-    }
+        "id": 2,
+        "name": "Clementina Moen",
+        "email": "andreane.turner@example.org",
+        "phone": "+1 (229) 450-5078",
+        "is_admin": 0,
+        "email_verified_at": "2026-01-04T21:38:36.000000Z",
+        "created_at": "2026-01-04T21:38:36.000000Z",
+        "updated_at": "2026-01-04T21:38:36.000000Z",
+        "deleted_at": null
+    },
 ]
 ```
 
