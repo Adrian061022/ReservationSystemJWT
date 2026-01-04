@@ -491,7 +491,7 @@ Saját felhasználói adatok módosítása (név, e-mail, jelszó, telefonszám)
 
 **Válasz (sikeres frissítés):** `200 OK`
 ```json
-
+{
     "id": 21,
     "name": "Updated Name",
     "email": "admin@example.com",
