@@ -19,19 +19,26 @@ vagy `http://localhost/reservationSystem/public/api` (XAMPP)
 ## Adatbázis Terv
 
 ```
-+---------------------+       +-----------------+        +-------------+
-|        users        |       |   reservations  |        |  resources  |
-+---------------------+       +-----------------+        +-------------+
-| id (PK)             |1__    | id (PK)         |     __1| id (PK)     |
-| name                |   \__N| user_id (FK)    |    /   | name        |
-| email (unique)      |       | resource_id (FK)|M__/    | type        |
-| password            |       | start_time      |        | description |
-| phone (nullable)    |       | end_time        |        | available   |
-| is_admin (boolean)  |       | status          |        | created_at  |
-| created_at          |       | created_at      |        | updated_at  |
-| updated_at          |       | updated_at      |        +-------------+
-+---------------------+       +-----------------+
++---------------------+       +-------------------+        +---------------+
+|        users        |       |   reservations    |        |  resources    |
++---------------------+       +-------------------+        +---------------+
+| id (PK)             |1__    | id (PK)           |     __1| id (PK)       |
+| name                |   \__N| user_id (FK)      |    /   | name          |
+| email (unique)      |       | resource_id (FK)  |M__/    | type          |
+| password            |       | start_time        |        | description   |
+| phone (nullable)    |       | end_time          |        | available     |
+| is_admin (boolean)  |       | status            |        | created_at    |
+| created_at          |       | created_at        |        | updated_at    |
+| updated_at          |       | updated_at        |        | deleted_at    |
+| deleted_at          |       | deleted_at        |        +---------------+
++---------------------+       +-------------------+
 ```
+
+**Megjegyzés:** Mindhárom tábla használja a **Soft Delete** funkciót:
+- A `deleted_at` mező `NULL` értékű, ha a rekord aktív
+- Törléskor a `deleted_at` mező kitöltődik az aktuális timestamp-pel
+- A törölt rekordok alapértelmezetten nem jelennek meg a lekérdezésekben
+- A `withTrashed()` metódussal lekérhetők a törölt rekordok is
 
 ## Projekt Szerkezete
 
@@ -202,9 +209,16 @@ class User extends Authenticatable implements JWTSubject
     "phone": "+36201234567", // nullable
     "is_admin": false,
     "created_at": "2025-12-04T10:00:00Z",
-    "updated_at": "2025-12-04T10:00:00Z"
+    "updated_at": "2025-12-04T10:00:00Z",
+    "deleted_at": null // Soft delete: null ha nem törölt, timestamp ha törölt
 }
 ```
+
+**Fontos jellemzők:**
+- **SoftDeletes trait**: A User model használja a `SoftDeletes` trait-et
+- **deleted_at mező**: Törléskor nem törlődik fizikailag, csak a `deleted_at` mező töltődik ki timestamp-pel
+- **Lekérdezések**: A törölt felhasználók alapértelmezetten nem jelennek meg a lekérdezésekben
+- **JWT autentikáció**: Implementálja a `JWTSubject` interface-t
 
 ### Resource (Erőforrás)
 ```php
@@ -215,9 +229,15 @@ class User extends Authenticatable implements JWTSubject
     "description": "Large conference room for meetings",
     "available": true,
     "created_at": "2025-12-04T10:00:00Z",
-    "updated_at": "2025-12-04T10:00:00Z"
+    "updated_at": "2025-12-04T10:00:00Z",
+    "deleted_at": null // Soft delete: null ha nem törölve, timestamp ha törölve
 }
 ```
+
+**Fontos jellemzők:**
+- **SoftDeletes trait**: A Resource model használja a `SoftDeletes` trait-et
+- **deleted_at mező**: Törléskor nem törlődik fizikailag, csak a `deleted_at` mező töltődik ki timestamp-pel
+- **Lekérdezések**: A törölt erőforrások alapértelmezetten nem jelennek meg a lekérdezésekben
 
 ### Reservation (Foglalás)
 ```php
@@ -229,9 +249,16 @@ class User extends Authenticatable implements JWTSubject
     "end_time": "2025-12-10T15:00:00Z",
     "status": "pending", // pending, approved, rejected, cancelled
     "created_at": "2025-12-04T12:00:00Z",
-    "updated_at": "2025-12-04T12:00:00Z"
+    "updated_at": "2025-12-04T12:00:00Z",
+    "deleted_at": null // Soft delete: null ha nem törölve, timestamp ha törölve
 }
 ```
+
+**Fontos jellemzők:**
+- **SoftDeletes trait**: A Reservation model használja a `SoftDeletes` trait-et
+- **deleted_at mező**: Törléskor nem törlődik fizikailag, csak a `deleted_at` mező töltődik ki timestamp-pel
+- **Lekérdezések**: A törölt foglalások alapértelmezetten nem jelennek meg a lekérdezésekben
+- **Státusz kezelés**: A `status` mező lehetséges értékei: pending, approved, rejected, cancelled
 
 ## API Végpontok
 
@@ -1304,7 +1331,7 @@ class ResourceController extends Controller
      * DELETE /resources/{resource} - Erőforrás törlése (Admin csak)
      * 
      * Erőforrás eltávolítása a rendszerből.
-     * Hard delete: teljesen törlődik az adatbázisból.
+     * Soft delete: csak a deleted_at mező kitöltődik, az adatok megmaradnak.
      */
     public function destroy(Request $request, Resource $resource)
     {
@@ -1471,7 +1498,7 @@ class ReservationController extends Controller
             ], 403);
         }
 
-        // Foglalás törlése (hard delete)
+        // Foglalás törlése (soft delete)
         $reservation->delete();
 
         return response()->json(['message' => 'Foglalás törölve.'], 200);
