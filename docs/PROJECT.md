@@ -559,10 +559,15 @@ Bármely felhasználó adatainak lekérése az ID alapján.
 **Válasz:** `200 OK`
 ```json
 {
-    "id": 5,
-    "name": "John Doe",
-    "email": "john@example.com",
-    "phone": "+36201234567"
+    "id": 1,
+    "name": "Wallace Lynch",
+    "email": "royal95@example.net",
+    "phone": "(815) 623-6624",
+    "is_admin": 0,
+    "email_verified_at": "2026-01-04T21:38:35.000000Z",
+    "created_at": "2026-01-04T21:38:36.000000Z",
+    "updated_at": "2026-01-04T21:38:36.000000Z",
+    "deleted_at": null
 }
 ```
 
